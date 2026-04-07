@@ -1101,6 +1101,11 @@ class MainWindow(QMainWindow):
             self._init_api()
     def _init_api(self):
         """API 연결을 백그라운드 스레드로 시작 (UI 블로킹 없음)"""
+        # 이전 스레드가 실행 중이면 완료 대기 (가비지 컬렉션 방지)
+        if self._api_init_thread and self._api_init_thread.isRunning():
+            self._api_init_thread.quit()
+            self._api_init_thread.wait(3000)
+
         now = datetime.now().strftime("%H:%M:%S")
         self.log_area.append(f"[{now}] API 연결 중...")
         self.ls_badge.setText("LS ⏳")
@@ -1157,16 +1162,25 @@ class MainWindow(QMainWindow):
         if "error_holdings" in result:
             self.log_area.append(f"[{now}] ❌ 잔고 조회 실패: {result['error_holdings']}")
 
-        self._apply_market_index("KOSPI",  result.get("kospi"))
-        self._apply_market_index("KOSDAQ", result.get("kosdaq"))
+        try:
+            self._apply_market_index("KOSPI",  result.get("kospi"))
+            self._apply_market_index("KOSDAQ", result.get("kosdaq"))
+        except Exception as e:
+            self.log_area.append(f"[{now}] ⚠ 시장지수 오류: {e}")
 
-        sectors = result.get("sectors", [])
-        if sectors:
-            self._apply_sector_table(sectors)
+        try:
+            sectors = result.get("sectors", [])
+            if sectors:
+                self._apply_sector_table(sectors)
+        except Exception as e:
+            self.log_area.append(f"[{now}] ⚠ 업종지수 오류: {e}")
 
-        themes = result.get("themes", [])
-        if themes:
-            self._update_theme_section(themes)
+        try:
+            themes = result.get("themes", [])
+            if themes:
+                self._update_theme_section(themes)
+        except Exception as e:
+            self.log_area.append(f"[{now}] ⚠ 테마 오류: {e}")
 
         self.time_label.setText(f"⏱ {now} 업데이트")
 
@@ -1344,9 +1358,9 @@ class MainWindow(QMainWindow):
         max_rate = max(rates) if rates else 1.0
 
         for s, rate_abs in zip(sectors, rates):
-            chg = s["change"]
-            idx = s["index"]
-            name = s["name"]
+            chg = s.get("change", "0%")
+            idx = s.get("index", "0")
+            name = s.get("name", "")
             is_up = chg.startswith("+")
             bar_color  = "#ff6b6b" if is_up else "#74b9ff"
             text_color = "#ff6b6b" if is_up else "#74b9ff"
