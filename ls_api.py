@@ -368,27 +368,88 @@ class LSApi:
             return None
 
     # ─────────────────────────────────────
-    #  테마 목록 조회 (t8425)
+    #  상승테마 조회 (t8425) - /stock/investinfo
     # ─────────────────────────────────────
     def get_themes(self):
-        """테마 목록 조회 (t8425) - tmname/tmcode 반환"""
+        """상승테마 조회 (t8425, /stock/investinfo)
+        diff(등락률) 기준 내림차순 정렬 → 상위 상승 테마 반환
+        """
         if not self.ensure_token():
             return []
-        url = f"{self.base_url}/stock/sector"
-        body = {"t8425InBlock": {"gubun": "0"}}
+        url = f"{self.base_url}/stock/investinfo"
+        body = {"t8425InBlock": {"dummy": ""}}
         try:
             res = requests.post(url, headers=self._headers("t8425"),
                                 json=body, timeout=10)
             if res.status_code != 200:
-                print(f"[t8425] HTTP {res.status_code}")
+                print(f"[t8425] HTTP {res.status_code}: {res.text[:200]}")
                 return []
             rows = res.json().get("t8425OutBlock", [])
-            result = [{"name": r.get("tmname", "").strip(),
-                       "code": r.get("tmcode", "")} for r in rows if r.get("tmname")]
-            print(f"[LS API] ✅ 테마 조회 완료: {len(result)}개")
+            result = []
+            for r in rows:
+                name = r.get("tmname", "").strip()
+                if not name:
+                    continue
+                try:
+                    diff = float(r.get("diff", 0))
+                except:
+                    diff = 0.0
+                sign = "+" if diff >= 0 else ""
+                result.append({
+                    "name": name,
+                    "code": r.get("tmcode", ""),
+                    "diff": diff,
+                    "diff_str": f"{sign}{diff:.2f}%",
+                })
+            # 등락률 내림차순 정렬
+            result.sort(key=lambda x: x["diff"], reverse=True)
+            print(f"[LS API] ✅ 상승테마 조회 완료: {len(result)}개, "
+                  f"1위: {result[0]['name']} {result[0]['diff_str']}" if result else "")
             return result
         except Exception as e:
-            print(f"[LS API] ❌ 테마 조회 실패: {e}")
+            print(f"[LS API] ❌ 상승테마 조회 실패: {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  테마별 종목 조회 (t1532)
+    # ─────────────────────────────────────
+    def get_theme_stocks(self, tmcode):
+        """테마 내 종목 조회 (t1532, /stock/investinfo)"""
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/investinfo"
+        body = {"t1532InBlock": {"tmcode": tmcode}}
+        try:
+            res = requests.post(url, headers=self._headers("t1532"),
+                                json=body, timeout=10)
+            if res.status_code != 200:
+                print(f"[t1532] HTTP {res.status_code}: {res.text[:200]}")
+                return []
+            raw = res.json()
+            rows = raw.get("t1532OutBlock", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                name = r.get("hname", r.get("isuNm", "")).strip()
+                shcode = r.get("shcode", r.get("isu_cd", ""))
+                try:
+                    price = int(float(r.get("price", r.get("close", 0))))
+                    price_str = f"{price:,}"
+                except:
+                    price_str = "-"
+                try:
+                    diff = float(r.get("diff", r.get("rate", 0)))
+                    sign = "+" if diff >= 0 else ""
+                    diff_str = f"{sign}{diff:.2f}%"
+                except:
+                    diff_str = "-"
+                if name:
+                    result.append((name, price_str, diff_str, shcode))
+            print(f"[t1532] 테마({tmcode}) 종목: {len(result)}개")
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 테마종목 조회 실패: {e}")
             return []
 
     # ─────────────────────────────────────

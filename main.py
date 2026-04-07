@@ -1402,7 +1402,7 @@ class MainWindow(QMainWindow):
             self.log_area.append(f"[{now}] ❌ 매도 실패: {name}")
 
     def _update_theme_section(self):
-        """t8425 테마 목록으로 상승테마 섹션 갱신"""
+        """t8425 상승테마 갱신 - diff 기준 정렬, 실제 등락률 표시"""
         if not hasattr(self, 'theme_layout'):
             return
         themes = self.api.get_themes()
@@ -1414,20 +1414,26 @@ class MainWindow(QMainWindow):
             self._theme_loading_lbl.setParent(None)
             self._theme_loading_lbl = None
 
-        # 기존 카드 모두 제거
-        while self.theme_layout.count() > 1:  # 마지막 stretch 남김
+        # 기존 카드 제거
+        while self.theme_layout.count() > 1:
             item = self.theme_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         self.theme_codes = {t["name"]: t["code"] for t in themes}
 
-        for t in themes[:30]:  # 최대 30개
-            name = t["name"]
+        for t in themes[:30]:
+            name     = t["name"]
+            diff_str = t.get("diff_str", "-")
+            diff_val = t.get("diff", 0.0)
+            is_up    = diff_val >= 0
+            border   = "#ff6b6b" if is_up else "#74b9ff"
+            tc       = "#ff6b6b" if is_up else "#74b9ff"
+
             card = QFrame()
             card.setStyleSheet(
-                "background-color: #16213e; border-left: 3px solid #888888; "
-                "border-radius: 4px;"
+                f"background-color: #16213e; border-left: 3px solid {border}; "
+                f"border-radius: 4px;"
             )
             card.setCursor(Qt.PointingHandCursor)
             cl = QHBoxLayout(card)
@@ -1437,22 +1443,33 @@ class MainWindow(QMainWindow):
             name_lbl.setStyleSheet("color: #e0e0e0; font-size: 11px;")
             name_lbl.setToolTip(name)
 
-            chg_lbl = QLabel("-")
-            chg_lbl.setStyleSheet("color: #888888; font-size: 11px;")
-            chg_lbl.setFixedWidth(40)
+            chg_lbl = QLabel(diff_str)
+            chg_lbl.setStyleSheet(f"color: {tc}; font-size: 11px; font-weight: bold;")
+            chg_lbl.setFixedWidth(48)
+            chg_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             cl.addWidget(name_lbl, stretch=1)
             cl.addWidget(chg_lbl)
 
-            card.mousePressEvent = lambda _, n=name: self.show_theme_stocks(n)
+            tmcode = t.get("code", "")
+            card.mousePressEvent = lambda _, n=name, c=tmcode: self.show_theme_stocks(n, c)
             self.theme_layout.insertWidget(self.theme_layout.count() - 1, card)
 
-    def show_theme_stocks(self, theme):
-        stocks = self.theme_stocks.get(theme, [])
+    def show_theme_stocks(self, theme, tmcode=""):
+        """테마 클릭 시 t1532로 관련종목 실시간 조회"""
         self.related_grp.setTitle(f"📋 {theme} 관련종목")
         self.related_table.show()
+
+        # 캐시 우선, 없으면 API 조회
+        if tmcode and tmcode not in self.theme_stocks:
+            stocks = self.api.get_theme_stocks(tmcode)
+            self.theme_stocks[tmcode] = stocks
+        else:
+            stocks = self.theme_stocks.get(tmcode, [])
+
         self.related_table.setRowCount(len(stocks))
-        for r, (name, price, chg) in enumerate(stocks):
+        for r, row in enumerate(stocks):
+            name, price, chg = row[0], row[1], row[2]
             for c, val in enumerate([name, price, chg]):
                 item = QTableWidgetItem(val)
                 item.setTextAlignment(Qt.AlignCenter)
