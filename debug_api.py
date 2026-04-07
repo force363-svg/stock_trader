@@ -1,6 +1,5 @@
 """
-t1532/t1533 정확한 엔드포인트 탐색
-[주식] 투자정보 구독 확인 → 엔드포인트 경로가 다를 가능성
+t1532 type 파라미터 추가 테스트
 실행: python debug_api.py
 """
 import requests, time
@@ -27,69 +26,39 @@ def hdr(tr_cd):
         "tr_cont_key"  : "",
     }
 
-# 투자정보 관련 가능한 모든 엔드포인트
-endpoints = [
-    "/stock/investinfo",
-    "/stock/invest",
-    "/stock/info",
-    "/stock/theme",
-    "/stock/themes",
-    "/stock/invest-info",
-    "/stock/themeinfo",
-    "/stock/market-data",
-    "/stock/sector",
+tmcodes = ["0012", "0030", "0014"]  # 반도체장비, 조선, 반도체재료
+
+# t1532 다양한 바디 조합
+bodies = [
+    {"t1532InBlock": {"tmcode": "0012"}},
+    {"t1532InBlock": {"tmcode": "0012", "type": "0"}},
+    {"t1532InBlock": {"tmcode": "0012", "type": "1"}},
+    {"t1532InBlock": {"tmcode": "0012", "gubun": "0"}},
+    {"t1532InBlock": {"tmcode": "12"}},        # 앞 0 제거
+    {"t1532InBlock": {"tmcode": "0012", "dummy": ""}},
 ]
 
-print("=== t1532 엔드포인트 탐색 ===")
-for ep in endpoints:
-    try:
-        res = requests.post(f"{base}{ep}", headers=hdr("t1532"),
-            json={"t1532InBlock": {"tmcode": "0030"}}, timeout=10)  # 0030=조선
+print("=== t1532 /stock/sector - 바디 조합 테스트 ===")
+for body in bodies:
+    for ep in ["/stock/sector", "/stock/market-data"]:
+        res = requests.post(f"{base}{ep}", headers=hdr("t1532"), json=body, timeout=10)
         raw = res.json()
         rsp_cd  = raw.get("rsp_cd","?")
         rsp_msg = raw.get("rsp_msg","")
-        all_keys = list(raw.keys())
-        # OutBlock 계열 키 찾기
-        out_keys = [k for k in all_keys if "OutBlock" in k or "outblock" in k.lower()]
-        has_data = any(raw.get(k) for k in out_keys)
-        if res.status_code == 200:
-            print(f"  200 {ep} [{rsp_cd}] {rsp_msg}")
-            print(f"      키: {all_keys}, OutBlock키: {out_keys}, 데이터있음: {has_data}")
-            if has_data:
-                for k in out_keys:
-                    rows = raw[k]
-                    if rows:
-                        row = rows[0] if isinstance(rows,list) else rows
-                        print(f"      ✅ [{k}] {len(rows) if isinstance(rows,list) else 1}행, 첫행: {row}")
+        all_keys = [k for k in raw.keys() if "OutBlock" in k]
+        has_data = any(raw.get(k) for k in all_keys)
+        if res.status_code == 200 and has_data:
+            for k in all_keys:
+                rows = raw[k]
+                if rows:
+                    row = rows[0] if isinstance(rows,list) else rows
+                    cnt = len(rows) if isinstance(rows,list) else 1
+                    print(f"  ✅ {ep} body={list(body['t1532InBlock'].keys())}")
+                    print(f"     [{k}] {cnt}행, 첫행키: {list(row.keys())}")
+                    print(f"     첫행: {row}")
         else:
-            print(f"  {res.status_code} {ep} [{rsp_cd}] {rsp_msg}")
-    except Exception as e:
-        print(f"  ERR {ep}: {e}")
-    time.sleep(0.2)
-
-print()
-print("=== t1533 엔드포인트 탐색 ===")
-for ep in endpoints:
-    try:
-        res = requests.post(f"{base}{ep}", headers=hdr("t1533"),
-            json={"t1533InBlock": {"gubun": "0"}}, timeout=10)
-        raw = res.json()
-        rsp_cd  = raw.get("rsp_cd","?")
-        rsp_msg = raw.get("rsp_msg","")
-        out_keys = [k for k in raw.keys() if "OutBlock" in k]
-        has_data = any(raw.get(k) for k in out_keys)
-        if res.status_code == 200:
-            print(f"  200 {ep} [{rsp_cd}] {rsp_msg} OutBlock키: {out_keys} 데이터: {has_data}")
-            if has_data:
-                for k in out_keys:
-                    rows = raw[k]
-                    if rows:
-                        row = rows[0] if isinstance(rows,list) else rows
-                        print(f"      ✅ [{k}] 첫행: {row}")
-        else:
-            print(f"  {res.status_code} {ep} [{rsp_cd}] {rsp_msg}")
-    except Exception as e:
-        print(f"  ERR {ep}: {e}")
-    time.sleep(0.2)
+            inblock = body.get("t1532InBlock",{})
+            print(f"  ✗  {ep} {inblock} → [{rsp_cd}] {rsp_msg or '0행'}")
+        time.sleep(0.15)
 
 print("\n완료!")
