@@ -976,11 +976,18 @@ class MainWindow(QMainWindow):
         sector_table = QTableWidget()
         sector_table.setColumnCount(5)
         sector_table.setHorizontalHeaderLabels(["업종명", "지수", "등락률", "외국인", "기관"])
-        sector_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         sector_table.setEditTriggers(QTableWidget.NoEditTriggers)
         sector_table.setAlternatingRowColors(True)
         sector_table.setStyleSheet("QTableWidget { alternate-background-color: #1a2744; }")
-        sector_table.setRowCount(0)  # API 연결 후 채워짐
+        sector_table.setRowCount(0)
+        hdr = sector_table.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.Stretch)        # 업종명: 가변
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # 지수
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 등락률
+        hdr.setSectionResizeMode(3, QHeaderView.Fixed)          # 외국인
+        hdr.setSectionResizeMode(4, QHeaderView.Fixed)          # 기관
+        sector_table.setColumnWidth(3, 45)
+        sector_table.setColumnWidth(4, 45)
         self.sector_table = sector_table
         sector_layout.addWidget(sector_table)
 
