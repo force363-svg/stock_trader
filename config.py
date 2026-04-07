@@ -2,10 +2,11 @@ import json
 import os
 import sys
 
-# exe로 실행할 때와 .py로 실행할 때 경로 구분
+# 설정 파일은 항상 C:\StockTrader\ 에 저장
+# → 빌드/업데이트해도 절대 삭제되지 않음
 if getattr(sys, 'frozen', False):
-    # PyInstaller로 만든 exe 실행 시
-    BASE_DIR = os.path.dirname(sys.executable)
+    # exe 실행 시: C:\StockTrader\user_settings.json
+    BASE_DIR = os.path.dirname(os.path.dirname(sys.executable))
 else:
     # 개발 환경 (.py 직접 실행 시)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
