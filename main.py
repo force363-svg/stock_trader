@@ -1269,6 +1269,8 @@ class MainWindow(QMainWindow):
         sig_map = {s.get("stock_code"): s for s in self.ai_signals
                    if s.get("signal_type") in ("SELL", "HOLD")}
         scanned_today = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
+        now_hm = datetime.now().strftime("%H:%M")
+        market_open = "09:00" <= now_hm <= "15:30"
 
         for row in range(self.holdings_table.rowCount()):
             if row >= len(self.holdings_data):
@@ -1285,8 +1287,10 @@ class MainWindow(QMainWindow):
                     ai_color = "#fdcb6e"
             elif scanned_today:
                 ai_text, ai_color = "보유", "#fdcb6e"
-            else:
+            elif market_open:
                 ai_text, ai_color = "대기중", "#636e72"
+            else:
+                ai_text, ai_color = "장마감", "#636e72"
             item = self.holdings_table.item(row, 8)
             if item is None:
                 item = QTableWidgetItem()
@@ -1961,6 +1965,7 @@ class MainWindow(QMainWindow):
                        if s.get("signal_type") in ("SELL", "HOLD")}
             scanned = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
             sig     = sig_map.get(code)
+            now_hm  = datetime.now().strftime("%H:%M")
             if sig:
                 score = sig.get("score", 0)
                 if sig["signal_type"] == "SELL":
@@ -1969,8 +1974,10 @@ class MainWindow(QMainWindow):
                     ai_text, ai_color = f"보유 {score:.0f}점", "#fdcb6e"
             elif scanned:
                 ai_text, ai_color = "보유", "#fdcb6e"
-            else:
+            elif "09:00" <= now_hm <= "15:30":
                 ai_text, ai_color = "대기중", "#636e72"
+            else:
+                ai_text, ai_color = "장마감", "#636e72"
             ai_item = QTableWidgetItem(ai_text)
             ai_item.setTextAlignment(Qt.AlignCenter)
             ai_item.setForeground(QColor(ai_color))
