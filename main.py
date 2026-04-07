@@ -514,7 +514,7 @@ class SettingsDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("주식 자동매매 시스템 v1.0")
+        self.setWindowTitle("주식 자동매매 시스템 v1.1")
         self.setMinimumSize(1280, 800)
         self.setStyleSheet(DARK_STYLE)
 
