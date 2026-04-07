@@ -1265,12 +1265,9 @@ class MainWindow(QMainWindow):
         """보유종목 테이블의 AI판단 컬럼만 갱신 (신호 변경 시 호출)"""
         if not hasattr(self, 'holdings_table'):
             return
-        # 종목코드 → 신호 매핑
+        # 종목코드 → 신호 매핑 (날짜 무관, 가장 최근 데이터 기준)
         sig_map = {s.get("stock_code"): s for s in self.ai_signals
                    if s.get("signal_type") in ("SELL", "HOLD")}
-        scanned_today = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
-        now_hm = datetime.now().strftime("%H:%M")
-        market_open = "09:00" <= now_hm <= "15:30"
 
         for row in range(self.holdings_table.rowCount()):
             if row >= len(self.holdings_data):
@@ -1285,12 +1282,8 @@ class MainWindow(QMainWindow):
                 else:
                     ai_text  = f"보유 {score:.0f}점"
                     ai_color = "#fdcb6e"
-            elif scanned_today:
-                ai_text, ai_color = "보유", "#fdcb6e"
-            elif market_open:
-                ai_text, ai_color = "대기중", "#636e72"
             else:
-                ai_text, ai_color = "장마감", "#636e72"
+                ai_text, ai_color = "-", "#636e72"
             item = self.holdings_table.item(row, 8)
             if item is None:
                 item = QTableWidgetItem()
@@ -1959,25 +1952,19 @@ class MainWindow(QMainWindow):
                         item.setForeground(QColor("#74b9ff"))
                 self.holdings_table.setItem(row, col, item)
 
-            # AI 판단 (SELL/HOLD + 점수)
+            # AI 판단 (SELL/HOLD + 점수, 날짜 무관 최근 데이터 기준)
             code    = h.get("raw_code", "")
             sig_map = {s.get("stock_code"): s for s in self.ai_signals
                        if s.get("signal_type") in ("SELL", "HOLD")}
-            scanned = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
             sig     = sig_map.get(code)
-            now_hm  = datetime.now().strftime("%H:%M")
             if sig:
                 score = sig.get("score", 0)
                 if sig["signal_type"] == "SELL":
                     ai_text, ai_color = f"매도 {score:.0f}점", "#ff6b6b"
                 else:
                     ai_text, ai_color = f"보유 {score:.0f}점", "#fdcb6e"
-            elif scanned:
-                ai_text, ai_color = "보유", "#fdcb6e"
-            elif "09:00" <= now_hm <= "15:30":
-                ai_text, ai_color = "대기중", "#636e72"
             else:
-                ai_text, ai_color = "장마감", "#636e72"
+                ai_text, ai_color = "-", "#636e72"
             ai_item = QTableWidgetItem(ai_text)
             ai_item.setTextAlignment(Qt.AlignCenter)
             ai_item.setForeground(QColor(ai_color))
