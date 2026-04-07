@@ -10,7 +10,7 @@ else:
     # 개발 환경 (.py 직접 실행 시)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+CONFIG_FILE = os.path.join(BASE_DIR, "user_settings.json")
 
 DEFAULT_CONFIG = {
     "account": {
