@@ -347,18 +347,29 @@ class LSApi:
             res = requests.post(url, headers=self._headers("t8425"),
                                 json=body, timeout=10)
             res.raise_for_status()
-            rows = res.json().get("t8425OutBlock", [])
+            raw = res.json()
+            print(f"[t8425 응답키] {list(raw.keys())}")
+            # 응답 키 자동 탐색
+            rows = None
+            for key in raw:
+                if "OutBlock" in key or "outBlock" in key:
+                    rows = raw[key]
+                    print(f"[t8425] 사용 키: {key}, 데이터: {str(rows)[:200]}")
+                    break
+            if rows is None:
+                print(f"[t8425] 전체 응답: {str(raw)[:300]}")
+                return []
             if isinstance(rows, dict):
                 rows = [rows]
             results = []
             for row in rows[:10]:
-                name      = row.get("hname", "-").strip()
-                pricejisu = float(row.get("pricejisu", 0))
-                jniljisu  = float(row.get("jniljisu", 0))
+                name      = row.get("hname", row.get("upnm", "-")).strip()
+                pricejisu = float(row.get("pricejisu", row.get("nowindex", 0)))
+                jniljisu  = float(row.get("jniljisu", row.get("preindex", 0)))
                 change    = ((pricejisu - jniljisu) / jniljisu * 100) if jniljisu > 0 else 0.0
                 sign      = "+" if change >= 0 else ""
                 results.append({
-                    "name":    name,
+                    "name":    name if name else "-",
                     "index":   f"{pricejisu:,.2f}",
                     "change":  f"{sign}{change:.2f}%",
                     "foreign": "-",
