@@ -948,7 +948,7 @@ class MainWindow(QMainWindow):
 
 # ── AI 신호 파일 읽기 (10초마다) ──
     def _update_ai_signals(self):
-        """ai_signals.json 읽어서 추천종목 테이블 갱신"""
+        """ai_signals.json 읽어서 스캔종목/추천종목 테이블 갱신"""
         if getattr(sys, 'frozen', False):
             base = os.path.dirname(os.path.dirname(sys.executable))
         else:
@@ -967,50 +967,68 @@ class MainWindow(QMainWindow):
         scan_count = data.get("scan_count", 0)
         timestamp  = data.get("timestamp", "")[:16].replace("T", " ")
 
+        buy_signals  = [s for s in signals if s.get("signal_type") == "BUY"]
+        all_scanned  = sorted(signals, key=lambda x: x.get("score", 0), reverse=True)
+
         # 상태 레이블 갱신
         if hasattr(self, "ai_status_label"):
             self.ai_status_label.setText(
-                f"🤖 AI엔진: {timestamp} | {scan_count}종목 스캔 | {len(signals)}개 신호"
+                f"🤖 AI엔진: {timestamp} | {scan_count}종목 스캔 | 매수신호 {len(buy_signals)}개"
             )
             self.ai_status_label.setStyleSheet(
                 "color: #00b894; font-size: 11px; padding: 2px 4px;"
-                if signals else "color: #888; font-size: 11px; padding: 2px 4px;"
+                if buy_signals else "color: #888; font-size: 11px; padding: 2px 4px;"
             )
 
-        # 추천종목 테이블 갱신
-        if not hasattr(self, "rec_list"):
-            return
-        self.rec_list.setRowCount(0)
-        for rank, sig in enumerate(signals[:20], 1):   # 최대 20개
-            row = self.rec_list.rowCount()
-            self.rec_list.insertRow(row)
+        def _item(text, color=None, align=Qt.AlignCenter):
+            it = QTableWidgetItem(str(text))
+            it.setTextAlignment(align)
+            if color:
+                it.setForeground(QColor(color))
+            it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+            return it
 
-            score      = sig.get("score", 0)
-            confidence = sig.get("confidence", "")
-            sig_type   = sig.get("signal_type", "")
-            cur_price  = sig.get("current_price", 0)
-            stop_loss  = sig.get("stop_loss", 0)
-            target     = sig.get("target_price", 0)
+        # ── 왼쪽: AI 스캔종목 (전체, 점수순) ──
+        if hasattr(self, "scan_list"):
+            self.scan_list.setRowCount(0)
+            self._scan_codes = {}
+            for row_idx, sig in enumerate(all_scanned[:50]):   # 최대 50개
+                self.scan_list.insertRow(row_idx)
+                sig_type  = sig.get("signal_type", "")
+                score     = sig.get("score", 0)
+                cur_price = sig.get("current_price", 0)
 
-            # 색상: BUY=빨강, HOLD=노랑
-            score_color = "#ff6b6b" if sig_type == "BUY" else "#fdcb6e"
-            conf_color  = {"HIGH": "#00b894", "MEDIUM": "#fdcb6e", "LOW": "#888"}.get(confidence, "#888")
+                # 상태 색상: BUY=초록, HOLD=노랑, WATCH=회색
+                state_color = {"BUY": "#00b894", "HOLD": "#fdcb6e"}.get(sig_type, "#888")
+                score_color = "#00b894" if sig_type == "BUY" else "#fdcb6e" if sig_type == "HOLD" else "#aaa"
 
-            def _item(text, color=None, align=Qt.AlignCenter):
-                it = QTableWidgetItem(str(text))
-                it.setTextAlignment(align)
-                if color:
-                    it.setForeground(QColor(color))
-                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
-                return it
+                self.scan_list.setItem(row_idx, 0, _item(sig.get("stock_name", ""), align=Qt.AlignLeft | Qt.AlignVCenter))
+                self.scan_list.setItem(row_idx, 1, _item(f"{score:.1f}", score_color))
+                self.scan_list.setItem(row_idx, 2, _item(sig_type, state_color))
+                self.scan_list.setItem(row_idx, 3, _item(f"{cur_price:,}" if cur_price else "-"))
+                self._scan_codes[row_idx] = sig.get("stock_code", "")
 
-            self.rec_list.setItem(row, 0, _item(f"{rank}"))
-            self.rec_list.setItem(row, 1, _item(sig.get("stock_name", ""), align=Qt.AlignLeft | Qt.AlignVCenter))
-            self.rec_list.setItem(row, 2, _item(f"{score:.1f}점", score_color))
-            self.rec_list.setItem(row, 3, _item(confidence, conf_color))
-            self.rec_list.setItem(row, 4, _item(f"{cur_price:,}" if cur_price else "-"))
-            self.rec_list.setItem(row, 5, _item(f"{stop_loss:,}" if stop_loss else "-", "#ff6b6b"))
-            self.rec_list.setItem(row, 6, _item(f"{target:,}" if target else "-", "#74b9ff"))
+        # ── 오른쪽: AI 추천종목 (BUY만, 점수순) ──
+        if hasattr(self, "rec_list"):
+            self.rec_list.setRowCount(0)
+            for rank, sig in enumerate(buy_signals[:20], 1):
+                row = self.rec_list.rowCount()
+                self.rec_list.insertRow(row)
+
+                score      = sig.get("score", 0)
+                confidence = sig.get("confidence", "")
+                cur_price  = sig.get("current_price", 0)
+                stop_loss  = sig.get("stop_loss", 0)
+                target     = sig.get("target_price", 0)
+                conf_color = {"HIGH": "#00b894", "MEDIUM": "#fdcb6e", "LOW": "#888"}.get(confidence, "#888")
+
+                self.rec_list.setItem(row, 0, _item(f"{rank}"))
+                self.rec_list.setItem(row, 1, _item(sig.get("stock_name", ""), align=Qt.AlignLeft | Qt.AlignVCenter))
+                self.rec_list.setItem(row, 2, _item(f"{score:.1f}점", "#ff6b6b"))
+                self.rec_list.setItem(row, 3, _item(confidence, conf_color))
+                self.rec_list.setItem(row, 4, _item(f"{cur_price:,}" if cur_price else "-"))
+                self.rec_list.setItem(row, 5, _item(f"{stop_loss:,}" if stop_loss else "-", "#ff6b6b"))
+                self.rec_list.setItem(row, 6, _item(f"{target:,}" if target else "-", "#74b9ff"))
 
         self.ai_signals = signals
 
@@ -1459,38 +1477,31 @@ class MainWindow(QMainWindow):
     def _build_bottom_panels(self):
         splitter = QSplitter(Qt.Horizontal)
 
-        # 검색종목 리스트
-        left = QGroupBox("🔍 검색종목")
+        # AI 스캔종목 리스트 (스크리닝 통과한 전체 종목)
+        left = QGroupBox("🔍 AI 스캔종목")
         left_layout = QVBoxLayout(left)
-        self.search_list = QTableWidget()
-        self.search_list.setColumnCount(3)
-        self.search_list.setHorizontalHeaderLabels(["종목명", "현재가", "등락률"])
-        self.search_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.search_list.setEditTriggers(QTableWidget.NoEditTriggers)
-        # 샘플
-        stocks = [("삼성전자","73,400","+2.34%"),("SK하이닉스","128,500","+1.87%"),
-                  ("카카오","42,150","+3.12%"),("NAVER","168,000","+0.96%"),
-                  ("LG에너지솔루션","385,500","+4.21%")]
-        self.search_list.setRowCount(len(stocks))
-        for r, (n, p, c) in enumerate(stocks):
-            for col, val in enumerate([n, p, c]):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if col == 2:
-                    item.setForeground(QColor("#ff6b6b") if val.startswith("+") else QColor("#74b9ff"))
-                self.search_list.setItem(r, col, item)
+        self.scan_list = QTableWidget()
+        self.scan_list.setColumnCount(4)
+        self.scan_list.setHorizontalHeaderLabels(["종목명", "AI점수", "상태", "현재가"])
+        self.scan_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.scan_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.scan_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.scan_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.scan_list.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.scan_list.setRowCount(0)
 
         # 더블클릭 시 HTS 종목 연동
-        self.search_list.cellDoubleClicked.connect(self._on_search_click)
+        self.scan_list.cellDoubleClicked.connect(self._on_scan_click)
 
         btn_row = QHBoxLayout()
         btn_chart = QPushButton("📊 차트▶")
-        btn_chart.clicked.connect(self._open_chart_from_search)
-        btn_buy   = QPushButton("💸 매수")
+        btn_chart.clicked.connect(self._open_chart_from_scan)
+        btn_buy   = QPushButton("💸 수동매수")
         btn_buy.setObjectName("btn_start")
+        btn_buy.clicked.connect(self._manual_buy_from_scan)
         btn_row.addWidget(btn_chart)
         btn_row.addWidget(btn_buy)
-        left_layout.addWidget(self.search_list)
+        left_layout.addWidget(self.scan_list)
         left_layout.addLayout(btn_row)
 
         # AI 추천종목 리스트
@@ -1705,6 +1716,19 @@ class MainWindow(QMainWindow):
     # ── 모의/실전 전환 ──
     def switch_trade_mode(self, mode):
         now = datetime.now().strftime("%H:%M:%S")
+        # 자동매매 중이면 먼저 정지
+        if getattr(self, 'is_trading', False):
+            self.is_trading = False
+            if hasattr(self, 'trade_timer'):
+                self.trade_timer.stop()
+            self.btn_start.setText("🚀 자동매매 시작")
+            self.btn_start.setStyleSheet(
+                "background-color: #00b894; color: #fff; border: none; font-weight: bold;"
+            )
+            self.log_area.append(f"[{now}] ⏸ 모드 전환으로 자동매매 정지")
+        # 보유종목 초기화 (이전 모드 데이터 제거)
+        self.holdings_data = []
+        self._update_holdings_table([])
         self.trade_mode = mode
         # 버튼 상태 업데이트
         self.btn_mock.setChecked(mode == "mock")
@@ -1929,12 +1953,12 @@ class MainWindow(QMainWindow):
             h = self.holdings_data[row]
             self._send_to_hts(h["raw_code"], h["name"])
 
-    def _on_search_click(self, row, col):
-        """검색종목 클릭 → HTS 차트 연동"""
-        name_item = self.search_list.item(row, 0)
+    def _on_scan_click(self, row, col):
+        """AI 스캔종목 클릭 → HTS 차트 연동"""
+        name_item = self.scan_list.item(row, 0)
         if name_item:
             name = name_item.text()
-            code = getattr(self, '_search_codes', {}).get(row, "")
+            code = getattr(self, '_scan_codes', {}).get(row, "")
             self._send_to_hts(code, name)
 
     def _on_related_click(self, row, col):
@@ -1947,15 +1971,49 @@ class MainWindow(QMainWindow):
             clipboard.setText(name)
             self.log_area.append(f"[{now}] 📊 {name} → 종목명 클립보드 복사 (HTS에서 검색)")
 
-    def _open_chart_from_search(self):
-        """검색종목 차트▶ 버튼 클릭"""
-        row = self.search_list.currentRow()
+    def _open_chart_from_scan(self):
+        """AI 스캔종목 차트▶ 버튼 클릭"""
+        row = self.scan_list.currentRow()
         if row >= 0:
-            name_item = self.search_list.item(row, 0)
+            name_item = self.scan_list.item(row, 0)
             if name_item:
                 name = name_item.text()
-                code = getattr(self, '_search_codes', {}).get(row, "")
+                code = getattr(self, '_scan_codes', {}).get(row, "")
                 self._send_to_hts(code, name)
+
+    def _manual_buy_from_scan(self):
+        """AI 스캔종목에서 수동매수 버튼 클릭"""
+        row = self.scan_list.currentRow()
+        if row < 0:
+            return
+        name_item = self.scan_list.item(row, 0)
+        if not name_item:
+            return
+        name = name_item.text()
+        code = getattr(self, '_scan_codes', {}).get(row, "")
+        now = datetime.now().strftime("%H:%M:%S")
+        if not self.api_connected:
+            self.log_area.append(f"[{now}] ❌ API 미연결 - 매수 불가")
+            return
+        if not code:
+            self.log_area.append(f"[{now}] ❌ 종목코드 없음: {name}")
+            return
+        config = load_config()
+        buy_amount = config["account"].get("buy_amount", 1000000)
+        # 현재가 컬럼(3번)에서 가격 읽기
+        price_item = self.scan_list.item(row, 3)
+        try:
+            price = int(price_item.text().replace(",", "")) if price_item else 0
+        except Exception:
+            price = 0
+        qty = max(1, buy_amount // price) if price > 0 else 1
+        self.log_area.append(f"[{now}] 💸 수동매수: {name}({code}) {qty}주 시장가")
+        result = self.api.buy_order(code, qty, price=0)
+        if result:
+            self.log_area.append(f"[{now}] ✅ 매수 체결: {name} {qty}주")
+            self.refresh_data()
+        else:
+            self.log_area.append(f"[{now}] ❌ 매수 실패: {name}")
 
     # ── AI 엔진 시작/정지 ──
     def toggle_ai_engine(self):
