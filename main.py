@@ -1616,11 +1616,11 @@ class MainWindow(QMainWindow):
         self.holdings_table = QTableWidget()
         self.holdings_table.setColumnCount(9)
         self.holdings_table.setHorizontalHeaderLabels([
-            "종목명", "매수가", "현재가", "등락률", "수익률", "보유수량", "평가금액", "손익금액", "매도"
+            "종목명", "매수가", "현재가", "등락률", "수익률", "보유수량", "평가금액", "손익금액", "AI판단"
         ])
         self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.holdings_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.holdings_table.setColumnWidth(8, 70)
+        self.holdings_table.setColumnWidth(8, 60)
         self.holdings_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.holdings_table.setAlternatingRowColors(True)
@@ -1883,17 +1883,21 @@ class MainWindow(QMainWindow):
                         item.setForeground(QColor("#74b9ff"))
                 self.holdings_table.setItem(row, col, item)
 
-            # 매도 버튼
-            btn_sell = QPushButton("💸 매도")
-            btn_sell.setStyleSheet(
-                "background-color: #d63031; color: #fff; border: none; "
-                "border-radius: 3px; font-size: 11px; padding: 2px;"
-            )
-            code = h["raw_code"]
-            qty = h["raw_qty"]
-            name = h["name"]
-            btn_sell.clicked.connect(lambda _, c=code, q=qty, n=name: self.sell_stock(n, c, q))
-            self.holdings_table.setCellWidget(row, 8, btn_sell)
+            # AI 판단 (SELL/HOLD)
+            code = h.get("raw_code", "")
+            sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
+            hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
+            if code in sell_codes:
+                ai_text, ai_color = "매도", "#ff6b6b"
+            elif code in hold_codes:
+                ai_text, ai_color = "보유", "#fdcb6e"
+            else:
+                ai_text, ai_color = "-", "#636e72"
+            ai_item = QTableWidgetItem(ai_text)
+            ai_item.setTextAlignment(Qt.AlignCenter)
+            ai_item.setForeground(QColor(ai_color))
+            ai_item.setFlags(ai_item.flags() & ~Qt.ItemIsEditable)
+            self.holdings_table.setItem(row, 8, ai_item)
 
     def _write_holdings_cache(self, holdings):
         """AI 엔진이 보유종목 SELL 판단에 쓸 holdings_cache.json 저장"""
