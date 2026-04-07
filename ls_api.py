@@ -12,15 +12,16 @@ class LSApi:
     def __init__(self, mode="real"):
         self.config = load_config()
         self.mode = mode
-        # 실전 API 키 하나로 두 서버 모두 접속
-        # - 실전(real): 포트 8080 → 실계좌 주문
-        # - 모의(mock): 포트 29443 → 모의계좌 주문 (실제 체결, 가상 머니)
-        self.app_key    = self.config["api"].get("ls_app_key", "")
-        self.app_secret = self.config["api"].get("ls_app_secret", "")
         if mode == "mock":
-            self.base_url = URL_MOCK  # 포트 29443 (LS 모의투자 서버)
+            # 모의투자: 포트 29443, 모의 전용 키 사용
+            self.base_url   = URL_MOCK
+            self.app_key    = self.config["api"].get("ls_mock_key", "")
+            self.app_secret = self.config["api"].get("ls_mock_secret", "")
         else:
-            self.base_url = URL_REAL  # 포트 8080 (LS 실전투자 서버)
+            # 실전투자: 포트 8080, 실전 키 사용
+            self.base_url   = URL_REAL
+            self.app_key    = self.config["api"].get("ls_app_key", "")
+            self.app_secret = self.config["api"].get("ls_app_secret", "")
         self.access_token = None
         self.token_expire_at = 0   # 토큰 만료 시각 (unix timestamp)
         self.last_error = ""
@@ -41,7 +42,8 @@ class LSApi:
     def get_token(self):
         # 앱키 유효성 검사
         if not self.app_key or not self.app_secret:
-            self.last_error = "App Key/Secret이 비어있습니다. 설정에서 실전 API 키를 입력하세요."
+            mode_name = "모의투자" if self.mode == "mock" else "실전투자"
+            self.last_error = f"{mode_name} App Key/Secret이 비어있습니다. 설정 > API 계정 설정에서 입력하세요."
             print(f"[LS API] ❌ {self.last_error}")
             return False
 

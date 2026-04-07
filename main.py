@@ -224,6 +224,8 @@ class SettingsDialog(QDialog):
         self.spin_loss.setValue(c["profit"]["loss_cut"])
         self.edit_ls_key.setText(c["api"].get("ls_app_key", ""))
         self.edit_ls_secret.setText(c["api"].get("ls_app_secret", ""))
+        self.edit_mock_key.setText(c["api"].get("ls_mock_key", ""))
+        self.edit_mock_secret.setText(c["api"].get("ls_mock_secret", ""))
         self.edit_krx_key.setText(c["api"].get("krx_key", ""))
         self.edit_kakao.setText(c["notify"]["kakao_token"])
         self.edit_telegram.setText(c["notify"]["telegram_token"])
@@ -242,6 +244,8 @@ class SettingsDialog(QDialog):
         self.config["profit"]["loss_cut"]      = self.spin_loss.value()
         self.config["api"]["ls_app_key"]       = self.edit_ls_key.text()
         self.config["api"]["ls_app_secret"]    = self.edit_ls_secret.text()
+        self.config["api"]["ls_mock_key"]      = self.edit_mock_key.text()
+        self.config["api"]["ls_mock_secret"]   = self.edit_mock_secret.text()
         self.config["api"]["krx_key"]          = self.edit_krx_key.text()
         self.config["notify"]["kakao_token"]   = self.edit_kakao.text()
         self.config["notify"]["telegram_token"]= self.edit_telegram.text()
@@ -396,8 +400,8 @@ class SettingsDialog(QDialog):
         self.edit_cert_path.setPlaceholderText("실투자 시 공인인증서 폴더 경로 (선택)")
         grid_login.addWidget(self.edit_cert_path, 2, 1)
 
-        # LS투자증권 API (실전/모의 공용)
-        grp_real = QGroupBox("LS투자증권 API (실전/모의 공용)")
+        # 실투자 API
+        grp_real = QGroupBox("실투자 API (포트 8080)")
         grid_real = QGridLayout(grp_real)
         grid_real.addWidget(QLabel("App Key:"), 0, 0)
         self.edit_ls_key = QLineEdit()
@@ -406,9 +410,23 @@ class SettingsDialog(QDialog):
         self.edit_ls_secret = QLineEdit()
         self.edit_ls_secret.setEchoMode(QLineEdit.Password)
         grid_real.addWidget(self.edit_ls_secret, 1, 1)
-        note_real = QLabel("* 실전 API 키 하나로 실전투자(포트 8080) / 모의투자(포트 29443) 모두 사용")
+        note_real = QLabel("* LS투자증권 OpenAPI 실전투자용 키")
         note_real.setStyleSheet("color: #888; font-size: 10px;")
         grid_real.addWidget(note_real, 2, 0, 1, 2)
+
+        # 모의투자 API
+        grp_mock = QGroupBox("모의투자 API (포트 29443)")
+        grid_mock = QGridLayout(grp_mock)
+        grid_mock.addWidget(QLabel("App Key:"), 0, 0)
+        self.edit_mock_key = QLineEdit()
+        grid_mock.addWidget(self.edit_mock_key, 0, 1)
+        grid_mock.addWidget(QLabel("App Secret:"), 1, 0)
+        self.edit_mock_secret = QLineEdit()
+        self.edit_mock_secret.setEchoMode(QLineEdit.Password)
+        grid_mock.addWidget(self.edit_mock_secret, 1, 1)
+        note_mock = QLabel("* LS투자증권 OpenAPI 모의투자용 키 (별도 발급)")
+        note_mock.setStyleSheet("color: #888; font-size: 10px;")
+        grid_mock.addWidget(note_mock, 2, 0, 1, 2)
 
         # 한국거래소(KRX) API
         grp_krx = QGroupBox("한국거래소(KRX) API")
@@ -419,6 +437,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(grp_login)
         layout.addWidget(grp_real)
+        layout.addWidget(grp_mock)
         layout.addWidget(grp_krx)
         layout.addStretch()
         return w
@@ -604,7 +623,8 @@ class LoginDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self, trade_mode="real"):
         super().__init__()
-        self.setWindowTitle("주식 자동매매 시스템 v1.1")
+        mode_title = "🎮 모의투자" if trade_mode == "mock" else "📊 실전투자"
+        self.setWindowTitle(f"주식 자동매매 시스템 v1.1 [{mode_title}]")
         self.setMinimumSize(1280, 800)
         self.setStyleSheet(DARK_STYLE)
 
