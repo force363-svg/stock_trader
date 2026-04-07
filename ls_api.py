@@ -338,10 +338,9 @@ class LSApi:
     #  업종지수 조회 (t8424)
     # ─────────────────────────────────────
     def get_sector_indices(self):
-        """주요 업종지수 조회"""
+        """주요 업종지수 조회 (t8424)"""
         if not self.ensure_token():
             return []
-        # 업종코드: 013=전기전자, 009=의약품, 020=금융업, 015=운수장비, 011=철강금속, 024=서비스업
         sector_codes = [
             ("전기전자", "013"),
             ("의약품",   "009"),
@@ -351,7 +350,7 @@ class LSApi:
             ("서비스",   "024"),
         ]
         results = []
-        url = f"{self.base_url}/stock/market-data"
+        url = f"{self.base_url}/stock/sector"
         for name, code in sector_codes:
             body = {"t8424InBlock": {"upcode": code}}
             try:
@@ -374,6 +373,9 @@ class LSApi:
                         "foreign": "-",
                         "inst":    "-",
                     })
+                else:
+                    results.append({"name": name, "index": "-", "change": "-",
+                                     "foreign": "-", "inst": "-"})
             except Exception as e:
                 print(f"[LS API] 업종({name}) 조회 실패: {e}")
                 results.append({"name": name, "index": "-", "change": "-",
