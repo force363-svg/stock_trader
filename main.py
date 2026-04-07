@@ -527,6 +527,9 @@ class MainWindow(QMainWindow):
         self.holdings_data = []  # 보유종목 원본 데이터
 
         self._build_ui()
+        # 버튼 초기 상태를 config의 trade_mode에 맞게 설정
+        self.btn_mock.setChecked(self.trade_mode == "mock")
+        self.btn_real.setChecked(self.trade_mode == "real")
         self._init_api()
 
         # 30초마다 자동 업데이트 타이머
@@ -653,7 +656,6 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(self.open_settings)
         layout.addWidget(self.btn_settings)
 
-        self.trade_mode = "real"
         self.btn_mock = QPushButton("모의")
         self.btn_mock.setCheckable(True)
         self.btn_mock.setStyleSheet("padding: 2px 8px; font-size: 11px;")
@@ -662,7 +664,6 @@ class MainWindow(QMainWindow):
 
         self.btn_real = QPushButton("실전")
         self.btn_real.setCheckable(True)
-        self.btn_real.setChecked(True)
         self.btn_real.setStyleSheet("padding: 2px 8px; font-size: 11px;")
         self.btn_real.clicked.connect(lambda: self.switch_trade_mode("real"))
         layout.addWidget(self.btn_real)

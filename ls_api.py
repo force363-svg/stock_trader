@@ -27,6 +27,13 @@ class LSApi:
     #  토큰 발급
     # ─────────────────────────────────────
     def get_token(self):
+        # 앱키 유효성 검사
+        if not self.app_key or not self.app_secret:
+            mode_name = "모의투자" if self.mode == "mock" else "실투자"
+            self.last_error = f"{mode_name} App Key/Secret이 비어있습니다. 설정에서 입력하세요."
+            print(f"[LS API] ❌ {self.last_error}")
+            return False
+
         url = f"{self.base_url}/oauth2/token"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
@@ -41,12 +48,26 @@ class LSApi:
             result = res.json()
             self.access_token = result.get("access_token")
             if not self.access_token:
-                self.last_error = f"토큰 응답 이상: {result}"
+                # API 서버 에러 메시지 표시
+                rsp_msg = result.get("rsp_msg", "")
+                rsp_cd = result.get("rsp_cd", "")
+                if rsp_msg:
+                    self.last_error = f"[{rsp_cd}] {rsp_msg}"
+                else:
+                    self.last_error = f"토큰 응답 이상: {result}"
                 print(f"[LS API] ❌ {self.last_error}")
                 return False
             self.last_error = ""
             print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}...")
             return True
+        except requests.exceptions.ConnectionError as e:
+            self.last_error = "LS 서버 연결 실패 - 네트워크 확인"
+            print(f"[LS API] ❌ {self.last_error}: {e}")
+            return False
+        except requests.exceptions.Timeout:
+            self.last_error = "LS 서버 응답 시간 초과 (10초)"
+            print(f"[LS API] ❌ {self.last_error}")
+            return False
         except Exception as e:
             self.last_error = str(e)
             print(f"[LS API] ❌ 토큰 발급 실패: {e}")
