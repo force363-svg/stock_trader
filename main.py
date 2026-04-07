@@ -332,7 +332,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(w)
         layout.setContentsMargins(8, 8, 8, 8)
 
-        # 점수 임계값 행
+        # 점수 임계값 + 스캔 설정 행
         thresh_row = QHBoxLayout()
         thresh_row.addWidget(QLabel("매수 임계값:"))
         self.spin_buy_thresh = QSpinBox()
@@ -347,6 +347,23 @@ class SettingsDialog(QDialog):
         self.spin_hold_thresh.setSuffix("점 이상")
         self.spin_hold_thresh.setFixedWidth(100)
         thresh_row.addWidget(self.spin_hold_thresh)
+        thresh_row.addSpacing(20)
+        thresh_row.addWidget(QLabel("스캔 간격:"))
+        self.spin_scan_interval = QSpinBox()
+        self.spin_scan_interval.setRange(30, 3600)
+        self.spin_scan_interval.setSuffix("초")
+        self.spin_scan_interval.setFixedWidth(90)
+        self.spin_scan_interval.setToolTip("AI 전 종목 스캔 주기 (최소 30초)")
+        thresh_row.addWidget(self.spin_scan_interval)
+        thresh_row.addSpacing(20)
+        thresh_row.addWidget(QLabel("최대 종목 수:"))
+        self.spin_max_scan = QSpinBox()
+        self.spin_max_scan.setRange(100, 5000)
+        self.spin_max_scan.setSingleStep(100)
+        self.spin_max_scan.setSuffix("개")
+        self.spin_max_scan.setFixedWidth(90)
+        self.spin_max_scan.setToolTip("한 번에 스캔할 최대 종목 수")
+        thresh_row.addWidget(self.spin_max_scan)
         thresh_row.addStretch()
         layout.addLayout(thresh_row)
 
@@ -487,6 +504,8 @@ class SettingsDialog(QDialog):
                 cfg = json.load(f)
             self.spin_buy_thresh.setValue(cfg.get("thresholds", {}).get("buy", 80))
             self.spin_hold_thresh.setValue(cfg.get("thresholds", {}).get("hold", 50))
+            self.spin_scan_interval.setValue(cfg.get("scan_interval_seconds", 60))
+            self.spin_max_scan.setValue(cfg.get("max_scan_stocks", 2000))
             for group in ("screening", "scoring", "sell"):
                 tbl = getattr(self, f"_ai_tbl_{group}")
                 tbl.setRowCount(0)
@@ -514,6 +533,8 @@ class SettingsDialog(QDialog):
                     "buy":  self.spin_buy_thresh.value(),
                     "hold": self.spin_hold_thresh.value()
                 },
+                "scan_interval_seconds": self.spin_scan_interval.value(),
+                "max_scan_stocks": self.spin_max_scan.value(),
                 "screening": [],
                 "scoring": [],
                 "sell": []
