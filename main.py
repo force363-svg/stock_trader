@@ -751,14 +751,16 @@ class MainWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
 
-        # 등락률 최대값 (바 크기 기준)
-        rates = []
-        for s in sectors:
+        # 등락률 파싱 후 내림차순 정렬 (상승 높은 것부터)
+        def parse_rate(s):
             try:
-                v = float(s["change"].replace("%", "").replace("+", ""))
-                rates.append(abs(v))
+                return float(s["change"].replace("%", "").replace("+", ""))
             except:
-                rates.append(0)
+                return 0.0
+
+        sectors = sorted(sectors, key=parse_rate, reverse=True)
+
+        rates = [abs(parse_rate(s)) for s in sectors]
         max_rate = max(rates) if rates else 1.0
 
         for s, rate_abs in zip(sectors, rates):
