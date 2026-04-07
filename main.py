@@ -677,6 +677,94 @@ class SettingsDialog(QDialog):
 
 
 # ─────────────────────────────────────────────
+#  AI 엔진 백그라운드 스레드
+# ─────────────────────────────────────────────
+class AIEngineThread(QThread):
+    """AI 엔진을 GUI 내부 백그라운드 스레드로 실행"""
+    status_signal = pyqtSignal(str)   # 상태 메시지 → GUI 로그
+
+    def __init__(self, mode="real"):
+        super().__init__()
+        self.mode     = mode
+        self._running = False
+
+    def run(self):
+        self._running = True
+        self.status_signal.emit(f"[AI엔진] 시작 (모드: {self.mode})")
+        try:
+            import sys, os
+            _root = os.path.dirname(os.path.abspath(__file__))
+            if _root not in sys.path:
+                sys.path.insert(0, _root)
+
+            from ai_engine.db.database          import init_db
+            from ai_engine.data.ls_data_fetcher import LSDataFetcher
+            from ai_engine.core.scanner         import Scanner
+            from ai_engine.comm.signal_writer   import write_signals
+            from ai_engine.comm.command_reader  import read_command
+            from ai_engine.learning.weight_optimizer import optimize_weights
+
+            init_db()
+            fetcher = LSDataFetcher(mode=self.mode)
+            if not fetcher.connect():
+                self.status_signal.emit("[AI엔진] ❌ API 연결 실패")
+                return
+
+            scanner    = Scanner(fetcher)
+            last_scan  = 0
+            last_learn = ""
+            SCAN_INTERVAL = 300   # 5분
+
+            self.status_signal.emit("[AI엔진] ✅ 준비 완료 - 장중 5분마다 스캔")
+
+            while self._running:
+                import time
+                from datetime import datetime
+
+                now_hm = datetime.now().strftime("%H:%M")
+                today  = datetime.now().strftime("%Y%m%d")
+
+                # GUI 명령 체크
+                cmd = read_command()
+                if cmd.get("command") == "stop":
+                    break
+
+                # 장 마감 후 학습 (1일 1회)
+                if now_hm >= "15:40" and last_learn != today:
+                    self.status_signal.emit("[AI엔진] 📚 가중치 학습 중...")
+                    try:
+                        optimize_weights()
+                        self.status_signal.emit("[AI엔진] ✅ 가중치 학습 완료")
+                    except Exception as e:
+                        self.status_signal.emit(f"[AI엔진] 학습 오류: {e}")
+                    last_learn = today
+
+                # 장중 스캔
+                if "09:00" <= now_hm <= "15:30":
+                    if time.time() - last_scan >= SCAN_INTERVAL:
+                        self.status_signal.emit("[AI엔진] 🔍 전 종목 스캔 중...")
+                        try:
+                            signals, count = scanner.run_scan()
+                            write_signals(signals, scan_count=count)
+                            self.status_signal.emit(
+                                f"[AI엔진] ✅ {count}종목 스캔 → {len(signals)}개 신호"
+                            )
+                        except Exception as e:
+                            self.status_signal.emit(f"[AI엔진] 스캔 오류: {e}")
+                        last_scan = time.time()
+
+                time.sleep(10)
+
+        except Exception as e:
+            self.status_signal.emit(f"[AI엔진] ❌ 오류: {e}")
+        finally:
+            self.status_signal.emit("[AI엔진] 정지됨")
+
+    def stop(self):
+        self._running = False
+
+
+# ─────────────────────────────────────────────
 #  메인 윈도우
 # ─────────────────────────────────────────────
 class MainWindow(QMainWindow):
@@ -694,6 +782,7 @@ class MainWindow(QMainWindow):
         self.is_trading = False
         self.holdings_data = []  # 보유종목 원본 데이터
         self.ai_signals    = []  # AI 신호 캐시
+        self.ai_thread     = None  # AI 엔진 스레드
 
         self._build_ui()
         self._init_api()
@@ -1039,6 +1128,14 @@ class MainWindow(QMainWindow):
         self.btn_stop = QPushButton("⏹ 정지")
         self.btn_stop.setObjectName("btn_stop")
         layout.addWidget(self.btn_stop)
+
+        self.btn_ai_engine = QPushButton("🤖 AI엔진 시작")
+        self.btn_ai_engine.setStyleSheet(
+            "background-color: #6c5ce7; color: #fff; border: none; "
+            "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
+        )
+        self.btn_ai_engine.clicked.connect(self.toggle_ai_engine)
+        layout.addWidget(self.btn_ai_engine)
 
         self.btn_start = QPushButton("🚀 자동매매 시작")
         self.btn_start.setObjectName("btn_start")
@@ -1738,6 +1835,34 @@ class MainWindow(QMainWindow):
                 code = getattr(self, '_search_codes', {}).get(row, "")
                 self._send_to_hts(code, name)
 
+    # ── AI 엔진 시작/정지 ──
+    def toggle_ai_engine(self):
+        now = datetime.now().strftime("%H:%M:%S")
+        if self.ai_thread and self.ai_thread.isRunning():
+            # 정지
+            self.ai_thread.stop()
+            self.ai_thread.wait(3000)
+            self.ai_thread = None
+            self.btn_ai_engine.setText("🤖 AI엔진 시작")
+            self.btn_ai_engine.setStyleSheet(
+                "background-color: #6c5ce7; color: #fff; border: none; "
+                "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
+            )
+            self.log_area.append(f"[{now}] ⏸ AI 엔진 정지")
+        else:
+            # 시작
+            self.ai_thread = AIEngineThread(mode=self.trade_mode)
+            self.ai_thread.status_signal.connect(
+                lambda msg: self.log_area.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+            )
+            self.ai_thread.start()
+            self.btn_ai_engine.setText("🤖 AI엔진 정지")
+            self.btn_ai_engine.setStyleSheet(
+                "background-color: #00b894; color: #fff; border: none; "
+                "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
+            )
+            self.log_area.append(f"[{now}] ▶ AI 엔진 시작")
+
     # ── 자동매매 시작/정지 ──
     def toggle_trading(self):
         now = datetime.now().strftime("%H:%M:%S")
@@ -1845,6 +1970,14 @@ class MainWindow(QMainWindow):
 
         # 잔고 갱신
         self.refresh_data()
+
+
+    def closeEvent(self, event):
+        """창 닫을 때 AI 엔진 스레드 정지"""
+        if self.ai_thread and self.ai_thread.isRunning():
+            self.ai_thread.stop()
+            self.ai_thread.wait(3000)
+        event.accept()
 
 
 # ─────────────────────────────────────────────
