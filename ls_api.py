@@ -416,8 +416,9 @@ class LSApi:
 
                 row = out[0] if isinstance(out, list) else out
 
-                # 업종명 (없으면 display_name 사용)
-                name = str(row.get("hname", row.get("upnm", display_name))).strip() or display_name
+                # 업종명 (없으면 display_name 사용) - 내부 공백 정규화
+                raw_name = str(row.get("hname", row.get("upnm", display_name)))
+                name = " ".join(raw_name.split()) or display_name
 
                 # 현재지수 (pricejisu)
                 try:
