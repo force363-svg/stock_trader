@@ -927,7 +927,6 @@ class AIEngineThread(QThread):
             scanner    = Scanner(fetcher)
             last_scan  = 0
             last_learn = ""
-            last_closing = ""
             import json as _json
             import time
             from datetime import datetime
@@ -964,54 +963,26 @@ class AIEngineThread(QThread):
                         self.status_signal.emit(f"[AI엔진] 학습 오류: {e}")
                     last_learn = today
 
-                # 장마감 최종 판단 스캔 (15:29~15:31, 1일 1회)
-                # 보유종목 대상으로 최종 매도/보유 판단 후 저장
-                if "15:29" <= now_hm <= "15:31" and last_closing != today:
-                    self.status_signal.emit("[AI엔진] 🔔 장마감 보유종목 최종 판단 중...")
+# 스캔 (시간 무관 - 장중이면 전체, 아니면 보유종목만)
+                if time.time() - last_scan >= scan_interval:
+                    market_open = "09:00" <= now_hm <= "15:30"
+                    max_s = max_scan if market_open else 0  # 장외: 보유종목만
+                    label = "전 종목" if market_open else "보유종목"
+                    self.status_signal.emit(
+                        f"[AI엔진] 🔍 {label} 스캔 중... (간격:{scan_interval}초)"
+                    )
                     try:
-                        from ai_engine.core.scanner import _load_holdings_cache
-                        from ai_engine.core.signal_generator import generate_sell_signal
-                        held = _load_holdings_cache()
-                        closing_signals = []
-                        for h in held:
-                            code = h.get("code", "")
-                            name = h.get("name", "")
-                            if not code:
-                                continue
-                            try:
-                                data = scanner._fetch_data(code)
-                                sig  = generate_sell_signal(code, name, data, h)
-                                closing_signals.append(sig)
-                            except Exception:
-                                pass
-                        if closing_signals:
-                            write_signals(closing_signals, scan_count=len(held))
-                            sell_cnt = sum(1 for s in closing_signals if s["signal_type"] == "SELL")
-                            hold_cnt = sum(1 for s in closing_signals if s["signal_type"] == "HOLD")
-                            self.status_signal.emit(
-                                f"[AI엔진] ✅ 장마감 판단 완료 → 매도:{sell_cnt} 보유:{hold_cnt}"
-                            )
-                        last_closing = today
-                    except Exception as e:
-                        self.status_signal.emit(f"[AI엔진] 장마감 판단 오류: {e}")
-
-                # 장중 스캔
-                if "09:00" <= now_hm <= "15:30":
-                    if time.time() - last_scan >= scan_interval:
+                        signals, count = scanner.run_scan(max_stocks=max_s)
+                        write_signals(signals, scan_count=count)
+                        buy_cnt  = sum(1 for s in signals if s.get("signal_type") == "BUY")
+                        sell_cnt = sum(1 for s in signals if s.get("signal_type") == "SELL")
+                        hold_cnt = sum(1 for s in signals if s.get("signal_type") == "HOLD")
                         self.status_signal.emit(
-                            f"[AI엔진] 🔍 전 종목 스캔 중... (간격:{scan_interval}초 최대:{max_scan}종목)"
+                            f"[AI엔진] ✅ {label} 스캔 완료 → 매수:{buy_cnt} 보유:{hold_cnt} 매도:{sell_cnt}"
                         )
-                        try:
-                            signals, count = scanner.run_scan(max_stocks=max_scan)
-                            write_signals(signals, scan_count=count)
-                            buy_cnt  = sum(1 for s in signals if s.get("signal_type") == "BUY")
-                            sell_cnt = sum(1 for s in signals if s.get("signal_type") == "SELL")
-                            self.status_signal.emit(
-                                f"[AI엔진] ✅ {count}종목 스캔 → 매수:{buy_cnt} 매도:{sell_cnt}"
-                            )
-                        except Exception as e:
-                            self.status_signal.emit(f"[AI엔진] 스캔 오류: {e}")
-                        last_scan = time.time()
+                    except Exception as e:
+                        self.status_signal.emit(f"[AI엔진] 스캔 오류: {e}")
+                    last_scan = time.time()
 
                 time.sleep(5)   # 5초마다 체크 (명령/간격 변경 빠른 반영)
 
