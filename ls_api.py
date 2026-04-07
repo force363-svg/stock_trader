@@ -270,6 +270,450 @@ class LSApi:
             print(f"[LS API] ❌ 매도 주문 실패: {e}")
             return None
 
+    # ─────────────────────────────────────
+    #  업종/지수 현재가 조회 (t1511)
+    # ─────────────────────────────────────
+    # 올바른 엔드포인트: /indtp/market-data
+    # 올바른 필드명: upcode (shcode 아님)
+    # KOSPI종합=001, KOSDAQ종합=301
+    _SECTOR_CODES = [
+        # KOSPI종합/KOSDAQ종합은 상단 바에 표시 → 여기서 제외
+        ("002", "음식료"),
+        ("003", "섬유의복"),
+        ("004", "종이목재"),
+        ("005", "화학"),
+        ("006", "의약품"),
+        ("007", "비금속"),
+        ("008", "철강금속"),
+        ("009", "기계"),
+        ("010", "전기전자"),
+        ("011", "의료정밀"),
+        ("012", "운수장비"),
+        ("013", "유통업"),
+        ("015", "건설업"),
+        ("017", "통신업"),
+        ("018", "금융업"),
+    ]
+
+    def get_market_index(self, upcode="001"):
+        """업종/지수 현재가 (t1511)
+        upcode: 001=KOSPI종합, 301=KOSDAQ종합
+        엔드포인트: /indtp/market-data
+        """
+        if not self.ensure_token():
+            return None
+        url = f"{self.base_url}/indtp/market-data"
+        body = {"t1511InBlock": {"upcode": upcode}}
+        try:
+            res = requests.post(url, headers=self._headers("t1511"),
+                                json=body, timeout=10)
+            if res.status_code != 200:
+                print(f"[LS API] ❌ 지수 조회 실패({upcode}): HTTP {res.status_code} - {res.text[:200]}")
+                return None
+            data = res.json()
+            out = data.get("t1511OutBlock", {})
+            if out:
+                print(f"[LS API] ✅ 지수 조회 완료({upcode}): {out}")
+            else:
+                print(f"[LS API] ⚠ 지수 응답 키 없음({upcode}): {list(data.keys())}")
+            return out if out else None
+        except Exception as e:
+            print(f"[LS API] ❌ 지수 조회 실패({upcode}): {e}")
+            return None
+
+    # ─────────────────────────────────────
+    #  상승테마 조회 (t8425) - /stock/investinfo
+    # ─────────────────────────────────────
+    def get_themes(self):
+        """상승테마 조회 (t1533 - 테마별시세조회)
+        t1533: 테마 전체의 diff(등락률)/avgdiff 한 번에 제공
+        gubun=0(전체), diff 기준 내림차순 정렬
+        엔드포인트: /stock/investinfo 시도 → /stock/sector 폴백
+        """
+        if not self.ensure_token():
+            return []
+
+        endpoints = ["/stock/investinfo", "/stock/sector"]
+        for endpoint in endpoints:
+            try:
+                body = {"t1533InBlock": {"gubun": "0"}}
+                res = requests.post(f"{self.base_url}{endpoint}",
+                                    headers=self._headers("t1533"),
+                                    json=body, timeout=10)
+                print(f"[t1533] {endpoint} → HTTP {res.status_code}")
+                if res.status_code != 200:
+                    continue
+                raw = res.json()
+                rows = raw.get("t1533OutBlock", [])
+                if not rows:
+                    print(f"[t1533] {endpoint} 빈 응답: {list(raw.keys())}")
+                    continue
+                first = rows[0] if isinstance(rows, list) else rows
+                print(f"[t1533] 첫행 키: {list(first.keys())}")
+                result = []
+                for r in (rows if isinstance(rows, list) else [rows]):
+                    name = r.get("tmname", "").strip()
+                    if not name:
+                        continue
+                    try:
+                        diff = float(r.get("diff", r.get("avgdiff", 0)))
+                    except:
+                        diff = 0.0
+                    sign = "+" if diff >= 0 else ""
+                    result.append({
+                        "name":     name,
+                        "code":     r.get("tmcode", ""),
+                        "diff":     diff,
+                        "diff_str": f"{sign}{diff:.2f}%",
+                    })
+                result.sort(key=lambda x: x["diff"], reverse=True)
+                top = result[0] if result else None
+                print(f"[LS API] ✅ 상승테마 {len(result)}개"
+                      + (f", 1위: {top['name']} {top['diff_str']}" if top else ""))
+                return result
+            except Exception as e:
+                print(f"[t1533] {endpoint} 오류: {e}")
+
+        print("[LS API] ❌ t1533 실패 - t8425 폴백")
+        # t8425 폴백 (등락률 없이 이름만)
+        try:
+            res = requests.post(f"{self.base_url}/stock/sector",
+                                headers=self._headers("t8425"),
+                                json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
+            rows = res.json().get("t8425OutBlock", [])
+            return [{"name": r.get("tmname","").strip(), "code": r.get("tmcode",""),
+                     "diff": 0.0, "diff_str": "-"} for r in rows if r.get("tmname")]
+        except:
+            return []
+
+    # ─────────────────────────────────────
+    #  테마별 종목 조회 (t1532)
+    # ─────────────────────────────────────
+    def get_theme_stocks(self, tmcode):
+        """테마 내 종목 조회 (t1532, /stock/investinfo)"""
+        if not self.ensure_token():
+            return []
+        body_t1532 = {"t1532InBlock": {"tmcode": tmcode}}
+        body_t1537 = {"t1537InBlock": {"tmcode": tmcode}}
+        # 엔드포인트 + TR 우선순위 시도
+        attempts = [
+            ("/stock/market-data", "t1532", body_t1532),
+            ("/stock/market-data", "t1537", body_t1537),
+            ("/stock/sector",      "t1532", body_t1532),
+            ("/stock/sector",      "t1537", body_t1537),
+        ]
+        for endpoint, tr_cd, body in attempts:
+            try:
+                res = requests.post(f"{self.base_url}{endpoint}",
+                                    headers=self._headers(tr_cd),
+                                    json=body, timeout=10)
+                if res.status_code != 200:
+                    continue
+                raw = res.json()
+                # OutBlock1 우선, 없으면 OutBlock
+                rows = (raw.get(f"{tr_cd}OutBlock1") or
+                        raw.get(f"{tr_cd}OutBlock") or [])
+                if isinstance(rows, dict):
+                    rows = [rows]
+                if not rows:
+                    continue
+                result = []
+                for r in rows:
+                    name = r.get("hname", r.get("isuNm", "")).strip()
+                    shcode = r.get("shcode", r.get("isu_cd", ""))
+                    try:
+                        price = int(float(r.get("price", r.get("close", 0))))
+                        price_str = f"{price:,}"
+                    except:
+                        price_str = "-"
+                    try:
+                        diff = float(r.get("diff", r.get("rate", 0)))
+                        sign = "+" if diff >= 0 else ""
+                        diff_str = f"{sign}{diff:.2f}%"
+                    except:
+                        diff_str = "-"
+                    if name:
+                        result.append((name, price_str, diff_str, shcode))
+                print(f"[{tr_cd}] ✅ 테마({tmcode}) 종목 {len(result)}개 ({endpoint})")
+                return result
+            except Exception as e:
+                print(f"[{tr_cd}] {endpoint} 오류: {e}")
+        print(f"[테마종목] ❌ tmcode={tmcode} 조회 실패")
+        return []
+
+    # ─────────────────────────────────────
+    #  일봉 데이터 조회 (t1305)
+    #  최근 n봉 OHLCV 반환
+    # ─────────────────────────────────────
+    def get_daily_ohlcv(self, stock_code: str, count: int = 250) -> list:
+        """
+        일봉 OHLCV 조회 (t1305)
+        반환: [{"date","open","high","low","close","volume"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/chart"
+        body = {
+            "t1305InBlock": {
+                "shcode"  : stock_code,
+                "dwmcode" : "2",        # 1=일봉, 2=주봉, 3=월봉 → 1 사용
+                "date"    : "",
+                "cnt"     : count,
+                "cts_date": ""
+            }
+        }
+        # 일봉 파라미터 수정
+        body["t1305InBlock"]["dwmcode"] = "1"
+        try:
+            res = requests.post(url, headers=self._headers("t1305"),
+                                json=body, timeout=15)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t1305OutBlock1", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    result.append({
+                        "date"  : str(r.get("date", "")),
+                        "open"  : int(float(r.get("open",  0))),
+                        "high"  : int(float(r.get("high",  0))),
+                        "low"   : int(float(r.get("low",   0))),
+                        "close" : int(float(r.get("close", 0))),
+                        "volume": int(float(r.get("jdiff_vol", r.get("volume", 0))))
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 일봉 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  분봉 데이터 조회 (t8410)
+    # ─────────────────────────────────────
+    def get_minute_ohlcv(self, stock_code: str, tick_range: int = 60,
+                         count: int = 100) -> list:
+        """
+        분봉 OHLCV 조회 (t8410)
+        tick_range: 1/3/5/10/15/30/60/120 분봉
+        반환: [{"time","open","high","low","close","volume"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/chart"
+        body = {
+            "t8410InBlock": {
+                "shcode"    : stock_code,
+                "ncnt"      : tick_range,
+                "qrycnt"    : count,
+                "nday"      : "0",
+                "sdate"     : "",
+                "stime"     : "",
+                "edate"     : "",
+                "etime"     : "",
+                "cts_date"  : "",
+                "cts_time"  : "",
+                "comp_yn"   : "N"
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t8410"),
+                                json=body, timeout=15)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t8410OutBlock1", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    result.append({
+                        "time"  : str(r.get("date", "") + r.get("time", "")),
+                        "open"  : int(float(r.get("open",   0))),
+                        "high"  : int(float(r.get("high",   0))),
+                        "low"   : int(float(r.get("low",    0))),
+                        "close" : int(float(r.get("close",  0))),
+                        "volume": int(float(r.get("jdiff_vol", r.get("volume", 0))))
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 분봉 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  외인/기관 수급 조회 (t1716)
+    #  최근 5일 순매수 데이터
+    # ─────────────────────────────────────
+    def get_supply_demand(self, stock_code: str, count: int = 5) -> list:
+        """
+        외인/기관 수급 조회 (t1716)
+        반환: [{"date","foreign_net","inst_net","total_net"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/investinfo"
+        body = {
+            "t1716InBlock": {
+                "shcode" : stock_code,
+                "gubun"  : "0",   # 0=일별
+                "cnt"    : count
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t1716"),
+                                json=body, timeout=10)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t1716OutBlock1", data.get("t1716OutBlock", []))
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    foreign_net = int(float(r.get("forgn_netq",  r.get("for_netqty",  0))))
+                    inst_net    = int(float(r.get("orgn_netq",   r.get("org_netqty",  0))))
+                    result.append({
+                        "date"       : str(r.get("date", "")),
+                        "foreign_net": foreign_net,
+                        "inst_net"   : inst_net,
+                        "total_net"  : foreign_net + inst_net
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 수급 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  전종목 리스트 조회 (t8430)
+    # ─────────────────────────────────────
+    def get_stock_list(self, market: str = "0") -> list:
+        """
+        전종목 코드/이름 조회 (t8430)
+        market: 0=전체, 1=코스피, 2=코스닥
+        반환: [{"code","name","market","price"}, ...]
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/market-data"
+        body = {
+            "t8430InBlock": {
+                "gubun": market
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t8430"),
+                                json=body, timeout=20)
+            if res.status_code != 200:
+                print(f"[LS API] ❌ 전종목 조회 실패: HTTP {res.status_code}")
+                return []
+            data = res.json()
+            rows = data.get("t8430OutBlock", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    code  = r.get("shcode", "").strip()
+                    name  = r.get("hname",  "").strip()
+                    mkt   = "KOSPI" if r.get("gubun", "") == "1" else "KOSDAQ"
+                    price = int(float(r.get("price", 0)))
+                    if code and name:
+                        result.append({"code": code, "name": name,
+                                       "market": mkt, "price": price})
+                except:
+                    continue
+            print(f"[LS API] ✅ 전종목 {len(result)}개")
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 전종목 조회 실패: {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  업종지수 조회 (t1511 반복 호출)
+    # ─────────────────────────────────────
+    def get_sector_indices(self):
+        """주요 업종지수 조회 (t1511, /indtp/market-data)
+        upcode 목록을 순회하며 각 업종의 현재가/등락률 수집
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/indtp/market-data"
+        results = []
+        for i, (upcode, display_name) in enumerate(self._SECTOR_CODES):
+            if i > 0:
+                time.sleep(0.2)   # TPS 제한 대응
+            body = {"t1511InBlock": {"upcode": upcode}}
+            try:
+                res = requests.post(url, headers=self._headers("t1511"),
+                                    json=body, timeout=10)
+                if res.status_code != 200:
+                    print(f"[t1511] {upcode} HTTP {res.status_code}: {res.text[:100]}")
+                    results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+                    continue
+                data = res.json()
+                out = data.get("t1511OutBlock", {})
+                if not out:
+                    print(f"[t1511] {upcode} OutBlock 없음: {list(data.keys())}")
+                    results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+                    continue
+
+                row = out[0] if isinstance(out, list) else out
+
+                # 업종명 (없으면 display_name 사용) - 내부 공백 정규화
+                raw_name = str(row.get("hname", row.get("upnm", display_name)))
+                name = " ".join(raw_name.split()) or display_name
+
+                # 현재지수 (pricejisu)
+                try:
+                    jisu = float(str(row.get("pricejisu", 0)).replace(",", ""))
+                except:
+                    jisu = 0.0
+
+                # 대비(change) + 구분(sign): 1=상승 2=하락 3=보합
+                try:
+                    chg_val = float(str(row.get("change", 0)).replace(",", ""))
+                except:
+                    chg_val = 0.0
+                sign_cd = str(row.get("sign", "3"))  # 1=상승,2=하락,3=보합
+
+                # 등락률 계산: change / (pricejisu - change) * 100
+                prev = jisu - chg_val
+                if prev > 0:
+                    rt = chg_val / prev * 100
+                    if sign_cd == "2":   # 하락이면 음수
+                        rt = -abs(rt)
+                    elif sign_cd == "1":
+                        rt = abs(rt)
+                    sign_str = "+" if rt >= 0 else ""
+                    change_str = f"{sign_str}{rt:.2f}%"
+                else:
+                    change_str = "-"
+
+                idx_str = f"{jisu:,.2f}" if jisu > 0 else "-"
+                results.append({
+                    "name":    name,
+                    "index":   idx_str,
+                    "change":  change_str,
+                    "foreign": "-",
+                    "inst":    "-",
+                })
+                print(f"[t1511] ✅ {upcode} {name}: {idx_str} ({change_str})")
+            except Exception as e:
+                print(f"[t1511] {upcode} 오류: {e}")
+                results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+
+        print(f"[t1511] 업종지수 조회 완료: {len(results)}개")
+        return results
+
 
 # ─────────────────────────────────────
 #  테스트 실행

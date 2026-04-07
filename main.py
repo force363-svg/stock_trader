@@ -4,6 +4,8 @@ import ctypes
 import ctypes.wintypes
 import threading
 import time
+import json
+import os
 from datetime import datetime
 from config import load_config, save_config
 from ls_api import LSApi
@@ -193,7 +195,7 @@ class SettingsDialog(QDialog):
         tabs = QTabWidget()
         tabs.addTab(self._tab_account(),    "💰 계좌·매수 설정")
         tabs.addTab(self._tab_profit(),     "📈 수익·손실 설정")
-        tabs.addTab(self._tab_condition(),  "📋 조건식 편집")
+        tabs.addTab(self._tab_ai_condition(), "🤖 AI 조건 편집기")
         tabs.addTab(self._tab_api(),        "🔑 API·계정 설정")
         tabs.addTab(self._tab_notify(),     "🔔 알림 설정")
         tabs.addTab(self._tab_data(),       "🗄️ 데이터 소스")
@@ -232,7 +234,6 @@ class SettingsDialog(QDialog):
         self.edit_chat_id.setText(c["notify"]["telegram_chat_id"])
         self.edit_data_path.setText(c["data"]["data_path"])
         self.combo_period.setCurrentText(c["data"]["period"])
-        self.condition_editor.setPlainText(c.get("condition", ""))
 
     def _save_and_close(self):
         self.config["account"]["buy_amount"]   = int(self.edit_buy_amount.text() or 0)
@@ -252,7 +253,6 @@ class SettingsDialog(QDialog):
         self.config["notify"]["telegram_chat_id"] = self.edit_chat_id.text()
         self.config["data"]["data_path"]       = self.edit_data_path.text()
         self.config["data"]["period"]          = self.combo_period.currentText()
-        self.config["condition"]               = self.condition_editor.toPlainText()
         save_config(self.config)
         self.accept()
 
@@ -326,54 +326,222 @@ class SettingsDialog(QDialog):
         return w
 
     # ── 탭 3: 조건식 편집 ──
-    def _tab_condition(self):
+    def _tab_ai_condition(self):
+        """AI 조건 편집기 탭 - 매수스크리닝 / 고려사항점수 / 매도조건"""
         w = QWidget()
         layout = QVBoxLayout(w)
+        layout.setContentsMargins(8, 8, 8, 8)
 
-        info = QLabel("📝 아래에 조건식을 직접 입력하세요. 엑셀 수식처럼 자유롭게 작성 가능합니다.")
-        info.setStyleSheet("color: #a0c4ff; font-size: 12px; padding: 4px;")
-        layout.addWidget(info)
+        # 점수 임계값 행
+        thresh_row = QHBoxLayout()
+        thresh_row.addWidget(QLabel("매수 임계값:"))
+        self.spin_buy_thresh = QSpinBox()
+        self.spin_buy_thresh.setRange(0, 100)
+        self.spin_buy_thresh.setSuffix("점 이상")
+        self.spin_buy_thresh.setFixedWidth(100)
+        thresh_row.addWidget(self.spin_buy_thresh)
+        thresh_row.addSpacing(20)
+        thresh_row.addWidget(QLabel("보유 임계값:"))
+        self.spin_hold_thresh = QSpinBox()
+        self.spin_hold_thresh.setRange(0, 100)
+        self.spin_hold_thresh.setSuffix("점 이상")
+        self.spin_hold_thresh.setFixedWidth(100)
+        thresh_row.addWidget(self.spin_hold_thresh)
+        thresh_row.addStretch()
+        layout.addLayout(thresh_row)
 
-        # 빠른 입력 버튼들
+        # 서브 탭
+        sub_tabs = QTabWidget()
+        sub_tabs.addTab(self._ai_cond_subtab("screening"), "📋 매수 스크리닝")
+        sub_tabs.addTab(self._ai_cond_subtab("scoring"),   "⭐ 고려사항 점수")
+        sub_tabs.addTab(self._ai_cond_subtab("sell"),      "🔴 매도 조건")
+        layout.addWidget(sub_tabs)
+
+        # 저장 버튼
+        btn_save = QPushButton("💾 AI 조건 저장")
+        btn_save.setObjectName("btn_settings")
+        btn_save.clicked.connect(self._save_ai_conditions)
         btn_row = QHBoxLayout()
-        quick_btns = ["코스피", "코스닥", "보통주", "거래량>평균*3", "RSI<30", "이평정배열", "등락률>2%"]
-        for text in quick_btns:
-            btn = QPushButton(text)
-            btn.setFixedHeight(26)
-            btn.clicked.connect(lambda _, t=text: self._insert_condition(t))
-            btn_row.addWidget(btn)
         btn_row.addStretch()
+        btn_row.addWidget(btn_save)
         layout.addLayout(btn_row)
 
-        # 조건식 편집기
-        self.condition_editor = QTextEdit()
-        self.condition_editor.setPlaceholderText(
-            "# 조건식 예시\n"
-            "시장 = '코스피' OR 시장 = '코스닥'\n"
-            "주식구분 = '보통주'\n"
-            "시가총액 >= 500억\n"
-            "현재가 >= 3000\n"
-            "거래량 >= 전일거래량 * 3\n"
-            "등락률 >= 2.0\n"
-            "RSI(14) <= 70\n"
-            "이동평균배열 = '정배열'  # 5일 > 20일 > 60일"
-        )
-        self.condition_editor.setFont(QFont("Consolas", 12))
-        self.condition_editor.setStyleSheet(
-            "background-color: #0a0a1a; color: #00ff88; "
-            "border: 1px solid #533483; font-family: Consolas;"
-        )
-        layout.addWidget(self.condition_editor)
-
-        # 지표 참고
-        ref = QLabel("📌 사용 가능 지표: 시가총액, 현재가, 거래량, 등락률, RSI(n), MACD, 볼린저밴드, 이동평균(n), 시가, 고가, 저가")
-        ref.setStyleSheet("color: #666; font-size: 11px;")
-        ref.setWordWrap(True)
-        layout.addWidget(ref)
+        # 초기값 로드
+        self._load_ai_conditions()
         return w
 
-    def _insert_condition(self, text):
-        self.condition_editor.insertPlainText(text + "\n")
+    def _ai_cond_subtab(self, group):
+        """조건 그룹별 서브탭 위젯 생성"""
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        # 안내
+        hint = QLabel("☑ 체크 = 활성 | 조건명 직접 입력 가능 | " +
+                      ("가중치: 점수 비중" if group == "scoring" else "임계값: 판단 기준값 (없으면 0)"))
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(hint)
+
+        # 테이블
+        tbl = QTableWidget(0, 4 if group == "scoring" else 3)
+        if group == "scoring":
+            tbl.setHorizontalHeaderLabels(["활성", "조건명", "설명", "가중치"])
+            tbl.setColumnWidth(0, 40); tbl.setColumnWidth(1, 160)
+            tbl.setColumnWidth(2, 260); tbl.setColumnWidth(3, 60)
+        else:
+            tbl.setHorizontalHeaderLabels(["활성", "조건명", "설명/임계값"])
+            tbl.setColumnWidth(0, 40); tbl.setColumnWidth(1, 180)
+            tbl.setColumnWidth(2, 310)
+        tbl.horizontalHeader().setStretchLastSection(True)
+        tbl.verticalHeader().setVisible(False)
+        tbl.setSelectionBehavior(QTableWidget.SelectRows)
+        tbl.setAlternatingRowColors(True)
+        tbl.setStyleSheet(
+            "QTableWidget { background:#16213e; alternate-background-color:#1a1a2e; }"
+            "QTableWidget::item { padding:3px; }"
+        )
+        layout.addWidget(tbl)
+        setattr(self, f"_ai_tbl_{group}", tbl)
+
+        # 버튼 행
+        btn_row = QHBoxLayout()
+        btn_add = QPushButton("＋ 추가")
+        btn_add.setFixedWidth(70)
+        btn_add.clicked.connect(lambda: self._ai_add_row(group))
+        btn_del = QPushButton("－ 삭제")
+        btn_del.setFixedWidth(70)
+        btn_del.clicked.connect(lambda: self._ai_del_row(group))
+        btn_up = QPushButton("▲")
+        btn_up.setFixedWidth(40)
+        btn_up.clicked.connect(lambda: self._ai_move_row(group, -1))
+        btn_dn = QPushButton("▼")
+        btn_dn.setFixedWidth(40)
+        btn_dn.clicked.connect(lambda: self._ai_move_row(group, 1))
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_del)
+        btn_row.addWidget(btn_up)
+        btn_row.addWidget(btn_dn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+        return w
+
+    # ── AI 조건 행 추가/삭제/이동 ──
+    def _ai_add_row(self, group):
+        tbl = getattr(self, f"_ai_tbl_{group}")
+        row = tbl.rowCount()
+        tbl.insertRow(row)
+        chk = QTableWidgetItem()
+        chk.setCheckState(Qt.Checked)
+        chk.setTextAlignment(Qt.AlignCenter)
+        tbl.setItem(row, 0, chk)
+        tbl.setItem(row, 1, QTableWidgetItem("새 조건"))
+        tbl.setItem(row, 2, QTableWidgetItem(""))
+        if tbl.columnCount() == 4:
+            tbl.setItem(row, 3, QTableWidgetItem("10"))
+        tbl.scrollToBottom()
+        tbl.editItem(tbl.item(row, 1))
+
+    def _ai_del_row(self, group):
+        tbl = getattr(self, f"_ai_tbl_{group}")
+        rows = sorted(set(i.row() for i in tbl.selectedItems()), reverse=True)
+        for r in rows:
+            tbl.removeRow(r)
+
+    def _ai_move_row(self, group, direction):
+        tbl = getattr(self, f"_ai_tbl_{group}")
+        row = tbl.currentRow()
+        if row < 0:
+            return
+        target = row + direction
+        if target < 0 or target >= tbl.rowCount():
+            return
+        for col in range(tbl.columnCount()):
+            a = tbl.item(row, col)
+            b = tbl.item(target, col)
+            a_text  = a.text()  if a else ""
+            b_text  = b.text()  if b else ""
+            a_check = a.checkState() if a and a.flags() & Qt.ItemIsUserCheckable else None
+            b_check = b.checkState() if b and b.flags() & Qt.ItemIsUserCheckable else None
+            if col == 0:
+                tbl.item(row, 0).setCheckState(b_check if b_check is not None else Qt.Unchecked)
+                tbl.item(target, 0).setCheckState(a_check if a_check is not None else Qt.Unchecked)
+            else:
+                if a: a.setText(b_text)
+                if b: b.setText(a_text)
+        tbl.setCurrentCell(target, tbl.currentColumn())
+
+    # ── engine_config.json 로드/저장 ──
+    def _get_config_path(self):
+        if getattr(sys, 'frozen', False):
+            base = os.path.dirname(os.path.dirname(sys.executable))
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, "engine_config.json")
+
+    def _load_ai_conditions(self):
+        path = self._get_config_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            self.spin_buy_thresh.setValue(cfg.get("thresholds", {}).get("buy", 80))
+            self.spin_hold_thresh.setValue(cfg.get("thresholds", {}).get("hold", 50))
+            for group in ("screening", "scoring", "sell"):
+                tbl = getattr(self, f"_ai_tbl_{group}")
+                tbl.setRowCount(0)
+                for item in cfg.get(group, []):
+                    r = tbl.rowCount()
+                    tbl.insertRow(r)
+                    chk = QTableWidgetItem()
+                    chk.setCheckState(Qt.Checked if item.get("enabled", True) else Qt.Unchecked)
+                    chk.setTextAlignment(Qt.AlignCenter)
+                    tbl.setItem(r, 0, chk)
+                    tbl.setItem(r, 1, QTableWidgetItem(item.get("name", "")))
+                    desc = item.get("description", item.get("threshold", ""))
+                    tbl.setItem(r, 2, QTableWidgetItem(str(desc)))
+                    if tbl.columnCount() == 4:
+                        tbl.setItem(r, 3, QTableWidgetItem(str(item.get("weight", 10))))
+        except Exception as e:
+            print(f"[AI조건] 로드 실패: {e}")
+
+    def _save_ai_conditions(self):
+        path = self._get_config_path()
+        try:
+            cfg = {
+                "version": "1.0",
+                "thresholds": {
+                    "buy":  self.spin_buy_thresh.value(),
+                    "hold": self.spin_hold_thresh.value()
+                },
+                "screening": [],
+                "scoring": [],
+                "sell": []
+            }
+            for group in ("screening", "scoring", "sell"):
+                tbl = getattr(self, f"_ai_tbl_{group}")
+                for r in range(tbl.rowCount()):
+                    chk  = tbl.item(r, 0)
+                    name = tbl.item(r, 1)
+                    desc = tbl.item(r, 2)
+                    enabled = (chk.checkState() == Qt.Checked) if chk else True
+                    entry = {
+                        "enabled": enabled,
+                        "name": name.text() if name else "",
+                        "description": desc.text() if desc else ""
+                    }
+                    if tbl.columnCount() == 4:
+                        w_item = tbl.item(r, 3)
+                        try:
+                            entry["weight"] = int(w_item.text()) if w_item else 10
+                        except:
+                            entry["weight"] = 10
+                    cfg[group].append(entry)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            print(f"[AI조건] 저장 완료 → {path}")
+        except Exception as e:
+            print(f"[AI조건] 저장 실패: {e}")
 
     # ── 탭 4: API·계정 설정 ──
     def _tab_api(self):
@@ -525,6 +693,7 @@ class MainWindow(QMainWindow):
         self.api_connected = False
         self.is_trading = False
         self.holdings_data = []  # 보유종목 원본 데이터
+        self.ai_signals    = []  # AI 신호 캐시
 
         self._build_ui()
         self._init_api()
@@ -534,6 +703,22 @@ class MainWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.refresh_data)
         self.refresh_timer.start(30000)  # 30초
 
+# 60초마다 자동 재연결 타이머 (미연결 상태일 때만 재시도)
+        self.reconnect_timer = QTimer()
+        self.reconnect_timer.timeout.connect(self._auto_reconnect)
+        self.reconnect_timer.start(60000)  # 60초
+
+        # 10초마다 AI 신호 파일 읽기
+        self.ai_timer = QTimer()
+        self.ai_timer.timeout.connect(self._update_ai_signals)
+        self.ai_timer.start(10000)  # 10초
+
+    def _auto_reconnect(self):
+        """60초마다 미연결 상태면 자동 재연결 시도"""
+        if not self.api_connected:
+            now = datetime.now().strftime("%H:%M:%S")
+            self.log_area.append(f"[{now}] 🔄 API 재연결 시도...")
+            self._init_api()
     def _init_api(self):
         """프로그램 시작 시 API 연결 및 초기 데이터 로드"""
         now = datetime.now().strftime("%H:%M:%S")
@@ -573,6 +758,190 @@ class MainWindow(QMainWindow):
             now = datetime.now().strftime("%H:%M:%S")
             self.log_area.append(f"[{now}] ❌ 데이터 갱신 실패: {e}")
 
+# ── AI 신호 파일 읽기 (10초마다) ──
+    def _update_ai_signals(self):
+        """ai_signals.json 읽어서 추천종목 테이블 갱신"""
+        if getattr(sys, 'frozen', False):
+            base = os.path.dirname(os.path.dirname(sys.executable))
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(base, "ai_signals.json")
+
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return
+
+        signals    = data.get("signals", [])
+        scan_count = data.get("scan_count", 0)
+        timestamp  = data.get("timestamp", "")[:16].replace("T", " ")
+
+        # 상태 레이블 갱신
+        if hasattr(self, "ai_status_label"):
+            self.ai_status_label.setText(
+                f"🤖 AI엔진: {timestamp} | {scan_count}종목 스캔 | {len(signals)}개 신호"
+            )
+            self.ai_status_label.setStyleSheet(
+                "color: #00b894; font-size: 11px; padding: 2px 4px;"
+                if signals else "color: #888; font-size: 11px; padding: 2px 4px;"
+            )
+
+        # 추천종목 테이블 갱신
+        if not hasattr(self, "rec_list"):
+            return
+        self.rec_list.setRowCount(0)
+        for rank, sig in enumerate(signals[:20], 1):   # 최대 20개
+            row = self.rec_list.rowCount()
+            self.rec_list.insertRow(row)
+
+            score      = sig.get("score", 0)
+            confidence = sig.get("confidence", "")
+            sig_type   = sig.get("signal_type", "")
+            cur_price  = sig.get("current_price", 0)
+            stop_loss  = sig.get("stop_loss", 0)
+            target     = sig.get("target_price", 0)
+
+            # 색상: BUY=빨강, HOLD=노랑
+            score_color = "#ff6b6b" if sig_type == "BUY" else "#fdcb6e"
+            conf_color  = {"HIGH": "#00b894", "MEDIUM": "#fdcb6e", "LOW": "#888"}.get(confidence, "#888")
+
+            def _item(text, color=None, align=Qt.AlignCenter):
+                it = QTableWidgetItem(str(text))
+                it.setTextAlignment(align)
+                if color:
+                    it.setForeground(QColor(color))
+                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                return it
+
+            self.rec_list.setItem(row, 0, _item(f"{rank}"))
+            self.rec_list.setItem(row, 1, _item(sig.get("stock_name", ""), align=Qt.AlignLeft | Qt.AlignVCenter))
+            self.rec_list.setItem(row, 2, _item(f"{score:.1f}점", score_color))
+            self.rec_list.setItem(row, 3, _item(confidence, conf_color))
+            self.rec_list.setItem(row, 4, _item(f"{cur_price:,}" if cur_price else "-"))
+            self.rec_list.setItem(row, 5, _item(f"{stop_loss:,}" if stop_loss else "-", "#ff6b6b"))
+            self.rec_list.setItem(row, 6, _item(f"{target:,}" if target else "-", "#74b9ff"))
+
+        self.ai_signals = signals
+
+    def _update_market_index(self):
+        """KOSPI/KOSDAQ 지수 업데이트"""
+        # upcode: KOSPI=001, KOSDAQ=301 (t1511 기준)
+        for name, upcode in [("KOSPI", "001"), ("KOSDAQ", "301")]:
+            if name not in self.market_labels:
+                continue
+            data = self.api.get_market_index(upcode)
+            if not data:
+                continue
+            try:
+                row = data[0] if isinstance(data, list) else data
+                price = float(str(row.get("pricejisu", 0)).replace(",", ""))
+                # sign: 1=상승, 2=하락, 3=보합 / change: 대비값
+                try:
+                    chg_val = float(str(row.get("change", 0)).replace(",", ""))
+                except:
+                    chg_val = 0.0
+                sign_cd = str(row.get("sign", "3"))
+                prev = price - chg_val
+                if prev > 0:
+                    rt = chg_val / prev * 100
+                    if sign_cd == "2":
+                        rt = -abs(rt)
+                    elif sign_cd == "1":
+                        rt = abs(rt)
+                else:
+                    rt = 0.0
+                val_lbl, chg_lbl = self.market_labels[name]
+                val_lbl.setText(f"{price:,.2f}")
+                sign_str = "+" if rt >= 0 else ""
+                color = "#ff6b6b" if rt >= 0 else "#74b9ff"
+                chg_lbl.setText(f"{sign_str}{rt:.2f}%")
+                chg_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+            except Exception as e:
+                print(f"[시장지수] {name} 파싱 실패: {e}")
+
+    def _update_sector_table(self):
+        """업종지수 차트형 카드로 업데이트"""
+        if not hasattr(self, 'sector_chart_layout'):
+            return
+        sectors = self.api.get_sector_indices()
+        if not sectors:
+            return
+
+        # 기존 카드 제거 (stretch 남김)
+        while self.sector_chart_layout.count() > 1:
+            item = self.sector_chart_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 등락률 파싱 후 내림차순 정렬 (상승 높은 것부터)
+        def parse_rate(s):
+            try:
+                return float(s["change"].replace("%", "").replace("+", ""))
+            except:
+                return 0.0
+
+        sectors = sorted(sectors, key=parse_rate, reverse=True)
+
+        rates = [abs(parse_rate(s)) for s in sectors]
+        max_rate = max(rates) if rates else 1.0
+
+        for s, rate_abs in zip(sectors, rates):
+            chg = s["change"]
+            idx = s["index"]
+            name = s["name"]
+            is_up = chg.startswith("+")
+            bar_color  = "#ff6b6b" if is_up else "#74b9ff"
+            text_color = "#ff6b6b" if is_up else "#74b9ff"
+
+            card = QFrame()
+            card.setStyleSheet("background-color: #16213e; border-radius: 3px;")
+            card.setFixedHeight(36)
+            cl = QHBoxLayout(card)
+            cl.setContentsMargins(6, 2, 6, 2)
+            cl.setSpacing(4)
+
+            # 업종명
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet("color: #c0c0c0; font-size: 11px;")
+            name_lbl.setFixedWidth(58)
+
+            # 지수값
+            idx_lbl = QLabel(idx)
+            idx_lbl.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: bold;")
+            idx_lbl.setFixedWidth(58)
+            idx_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            # 등락률 바 (미니 차트)
+            bar_widget = QWidget()
+            bar_widget.setFixedHeight(18)
+            bar_layout = QHBoxLayout(bar_widget)
+            bar_layout.setContentsMargins(0, 0, 0, 0)
+            bar_layout.setSpacing(0)
+
+            bar_fill = QFrame()
+            fill_w = max(4, int(80 * rate_abs / max(max_rate, 0.01)))
+            bar_fill.setFixedWidth(fill_w)
+            bar_fill.setFixedHeight(14)
+            bar_fill.setStyleSheet(f"background-color: {bar_color}; border-radius: 2px;")
+            bar_layout.addWidget(bar_fill)
+            bar_layout.addStretch()
+
+            # 등락률 텍스트
+            chg_lbl = QLabel(chg)
+            chg_lbl.setStyleSheet(f"color: {text_color}; font-size: 11px; font-weight: bold;")
+            chg_lbl.setFixedWidth(52)
+            chg_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            cl.addWidget(name_lbl)
+            cl.addWidget(idx_lbl)
+            cl.addWidget(bar_widget, stretch=1)
+            cl.addWidget(chg_lbl)
+
+            self.sector_chart_layout.insertWidget(
+                self.sector_chart_layout.count() - 1, card)
     def _build_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -940,26 +1309,25 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.search_list)
         left_layout.addLayout(btn_row)
 
-        # 추천종목 리스트
-        right = QGroupBox("⭐ 추천종목 상세")
+        # AI 추천종목 리스트
+        right = QGroupBox("🤖 AI 추천종목")
         right_layout = QVBoxLayout(right)
         self.rec_list = QTableWidget()
-        self.rec_list.setColumnCount(4)
-        self.rec_list.setHorizontalHeaderLabels(["순위", "종목명", "상승확률", "현재가"])
-        self.rec_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.rec_list.setColumnCount(7)
+        self.rec_list.setHorizontalHeaderLabels(["순위", "종목명", "AI점수", "신뢰도", "현재가", "손절가", "목표가"])
+        self.rec_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.rec_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.rec_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.rec_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.rec_list.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.rec_list.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.rec_list.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.rec_list.setEditTriggers(QTableWidget.NoEditTriggers)
-        rec_data = [("1","LG에너지솔루션","81.3%","385,500"),
-                    ("2","삼성전자","73.2%","73,400"),
-                    ("3","SK하이닉스","68.5%","128,500"),
-                    ("4","카카오","65.1%","42,150")]
-        self.rec_list.setRowCount(len(rec_data))
-        for r, row in enumerate(rec_data):
-            for c, val in enumerate(row):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if c == 2:
-                    item.setForeground(QColor("#00b894"))
-                self.rec_list.setItem(r, c, item)
+        self.rec_list.setRowCount(0)
+        # AI 상태 레이블
+        self.ai_status_label = QLabel("🤖 AI엔진: 신호 없음")
+        self.ai_status_label.setStyleSheet("color: #888; font-size: 11px; padding: 2px 4px;")
+        right_layout.addWidget(self.ai_status_label)
 
         # 하단 자동 / 수동 버튼
         btn_row2 = QHBoxLayout()
@@ -1398,18 +1766,49 @@ class MainWindow(QMainWindow):
 
     # ── 자동매매 사이클 ──
     def auto_trade_cycle(self):
-        """10초마다 실행 - 조건식 체크 → 매수/매도 판단"""
+        """10초마다 실행 - AI 신호 체크 → 매수/매도 판단"""
+        if not self.api_connected:
+            return
         now = datetime.now().strftime("%H:%M:%S")
         config = load_config()
 
         # 매매 시간 체크
         start_time = config["account"]["start_time"]
-        end_time = config["account"]["end_time"]
+        end_time   = config["account"]["end_time"]
         current_time = datetime.now().strftime("%H:%M")
         if current_time < start_time or current_time > end_time:
             return
 
-        # 손절 체크 (보유종목 중 손절 기준 이하인 종목 매도)
+        # ── AI 신호 기반 매수 ──
+        buy_amount  = config["account"]["buy_amount"]
+        max_stocks  = config["account"]["max_stocks"]
+        held_codes  = {h["raw_code"] for h in self.holdings_data}
+
+        if len(held_codes) < max_stocks:
+            for sig in self.ai_signals:
+                if sig.get("signal_type") != "BUY":
+                    continue
+                code = sig.get("stock_code", "")
+                name = sig.get("stock_name", "")
+                price = sig.get("current_price", 0)
+                if not code or not price or code in held_codes:
+                    continue
+                qty = max(1, buy_amount // price)
+                self.log_area.append(
+                    f"[{now}] 🤖 AI매수신호: {name}({code}) "
+                    f"점수:{sig['score']:.1f} 신뢰:{sig.get('confidence','')} "
+                    f"→ {qty}주 시장가"
+                )
+                result = self.api.buy_order(code, qty, price=0)
+                if result:
+                    self.log_area.append(f"[{now}] ✅ AI매수 체결: {name} {qty}주")
+                    held_codes.add(code)
+                else:
+                    self.log_area.append(f"[{now}] ❌ AI매수 실패: {name}")
+                if len(held_codes) >= max_stocks:
+                    break
+
+        # ── 손절 체크 ──
         loss_cut = config["profit"]["loss_cut"]
         for h in self.holdings_data:
             try:
@@ -1420,15 +1819,25 @@ class MainWindow(QMainWindow):
             except:
                 pass
 
-        # 수익 정산 체크 (단계별 분할 매도)
+        # ── AI 매도 신호 체크 (보유종목 중 SELL 신호) ──
+        sell_codes = {s["stock_code"] for s in self.ai_signals
+                      if s.get("signal_type") == "SELL"}
+        for h in self.holdings_data:
+            if h["raw_code"] in sell_codes:
+                self.log_area.append(f"[{now}] 🤖 AI매도신호: {h['name']} → 전량매도")
+                self.sell_stock(h["name"], h["raw_code"], h["raw_qty"])
+
+        # ── 수익 정산 체크 (단계별 분할 매도) ──
         profit_stages = config["profit"]["profit_stages"]
         for h in self.holdings_data:
             try:
                 pnl = float(h["pnl_rate"].replace("%", "").replace("+", ""))
                 for stage in reversed(profit_stages):
                     if pnl >= stage:
-                        sell_qty = max(1, h["raw_qty"] // 3)  # 1/3 분할매도
-                        self.log_area.append(f"[{now}] 📈 수익정산: {h['name']} ({h['pnl_rate']}) → {sell_qty}주 매도")
+                        sell_qty = max(1, h["raw_qty"] // 3)
+                        self.log_area.append(
+                            f"[{now}] 📈 수익정산: {h['name']} ({h['pnl_rate']}) → {sell_qty}주 매도"
+                        )
                         self.sell_stock(h["name"], h["raw_code"], sell_qty)
                         break
             except:
