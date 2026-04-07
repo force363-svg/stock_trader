@@ -1,9 +1,7 @@
 """
-t1511 전체 필드 파일 저장
+t8425 엔드포인트/바디 탐색
 실행: python debug_api.py
-결과: debug_t1511.txt 확인
 """
-import json
 import requests
 from config import load_config
 
@@ -17,29 +15,39 @@ res = requests.post(f"{base}/oauth2/token",
     data={"grant_type":"client_credentials","appkey":app_key,"appsecretkey":app_secret,"scope":"oob"},
     timeout=10)
 token = res.json().get("access_token", "")
-print("토큰 OK")
+print("토큰 OK\n")
 
-headers = {
-    "Content-Type" : "application/json; charset=utf-8",
-    "authorization": f"Bearer {token}",
-    "tr_cd"        : "t1511",
-    "tr_cont"      : "N",
-}
+def test(endpoint, body):
+    headers = {
+        "Content-Type" : "application/json; charset=utf-8",
+        "authorization": f"Bearer {token}",
+        "tr_cd"        : "t8425",
+        "tr_cont"      : "N",
+    }
+    res = requests.post(f"{base}{endpoint}", headers=headers, json=body, timeout=10)
+    raw = res.json()
+    rows = raw.get("t8425OutBlock", [])
+    rsp  = raw.get("rsp_cd","?")
+    rsp_msg = raw.get("rsp_msg","")
+    print(f"  {endpoint} body={body}")
+    print(f"  HTTP {res.status_code} [{rsp}] {rsp_msg}")
+    if rows:
+        row = rows[0] if isinstance(rows, list) else rows
+        print(f"  ✅ {len(rows) if isinstance(rows,list) else 1}행, 첫행 키: {list(row.keys())}")
+        print(f"  첫행: {row}")
+    else:
+        print(f"  응답키: {list(raw.keys())}")
+    print()
 
-# KOSPI 종합 (001) 조회
-res = requests.post(f"{base}/indtp/market-data", headers=headers,
-    json={"t1511InBlock": {"upcode": "001"}}, timeout=10)
-raw = res.json()
-out = raw.get("t1511OutBlock", {})
-row = out[0] if isinstance(out, list) else out
+# 기존에 작동했던 방식
+test("/stock/sector",     {"t8425InBlock": {"gubun": "0"}})
 
-# 파일로 저장 (잘리지 않게)
-with open("debug_t1511.txt", "w", encoding="utf-8") as f:
-    f.write("=== t1511OutBlock 전체 필드 (KOSPI 001) ===\n\n")
-    for k, v in row.items():
-        f.write(f"  {k:30s} = {repr(v)}\n")
+# 문서 기반 새 방식
+test("/stock/investinfo", {"t8425InBlock": {"dummy": ""}})
+test("/stock/investinfo", {"t8425InBlock": {"gubun": "0"}})
+test("/stock/investinfo", {"t8425InBlock": {}})
 
-print("→ debug_t1511.txt 저장 완료")
-print("\n전체 필드:")
-for k, v in row.items():
-    print(f"  {k:30s} = {v}")
+# 다른 엔드포인트 시도
+test("/stock/market-data",{"t8425InBlock": {"dummy": ""}})
+
+print("완료!")
