@@ -37,7 +37,7 @@ REM ── 모의투자 빌드 ──
 echo.
 echo [4/4] 모의투자 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 모의투자.spec --distpath C:\StockTrader -y --clean >nul 2>&1
+python -m PyInstaller 모의투자.spec --distpath C:\StockTrader -y --clean
 if errorlevel 1 (
     echo [오류] 모의투자 빌드 실패
     pause
