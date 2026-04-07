@@ -1579,14 +1579,23 @@ class MainWindow(QMainWindow):
 #  실행 진입점
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
+    import os
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    # 로그인 다이얼로그: 실전/모의 선택
-    login = LoginDialog()
-    if login.exec_() != QDialog.Accepted:
-        sys.exit(0)
+    # exe 이름으로 모드 자동 감지
+    # StockTrader_Mock.exe → 모의투자
+    # StockTrader_Real.exe → 실전투자
+    if getattr(sys, 'frozen', False):
+        exe_name = os.path.basename(sys.executable)
+    else:
+        exe_name = os.path.basename(sys.argv[0])
 
-    window = MainWindow(trade_mode=login.selected_mode)
+    if "Mock" in exe_name or "mock" in exe_name:
+        trade_mode = "mock"
+    else:
+        trade_mode = "real"
+
+    window = MainWindow(trade_mode=trade_mode)
     window.show()
     sys.exit(app.exec_())
