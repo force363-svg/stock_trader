@@ -5,13 +5,17 @@ import sys
 # 설정 파일은 항상 C:\StockTrader\ 에 저장
 # → 빌드/업데이트해도 절대 삭제되지 않음
 if getattr(sys, 'frozen', False):
-    # exe 실행 시: C:\StockTrader\user_settings.json
     BASE_DIR = os.path.dirname(os.path.dirname(sys.executable))
+    # 실전/모의 각각 별도 설정 파일
+    exe_name = os.path.basename(sys.executable).lower()
+    if "mock" in exe_name:
+        CONFIG_FILE = os.path.join(BASE_DIR, "user_settings_mock.json")
+    else:
+        CONFIG_FILE = os.path.join(BASE_DIR, "user_settings_real.json")
 else:
     # 개발 환경 (.py 직접 실행 시)
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-CONFIG_FILE = os.path.join(BASE_DIR, "user_settings.json")
+    CONFIG_FILE = os.path.join(BASE_DIR, "user_settings.json")
 
 DEFAULT_CONFIG = {
     "account": {
