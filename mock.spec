@@ -1,22 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+# numpy / pandas 전체 수집 (바이너리 .dll/.pyd 포함)
+np_d,  np_b,  np_h  = collect_all('numpy')
+pd_d,  pd_b,  pd_h  = collect_all('pandas')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=[] + np_b + pd_b,
+    datas=[
+        ('ai_engine',         'ai_engine'),
+        ('engine_config.json', '.'),
+    ] + np_d + pd_d,
     hiddenimports=[
         'requests', 'urllib3', 'charset_normalizer', 'certifi', 'idna',
         'PyQt5', 'PyQt5.QtWidgets', 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.sip',
-        'numpy', 'numpy.core', 'numpy.core._multiarray_umath',
-        'pandas', 'pandas.core', 'pandas.io',
         'sqlite3',
         'ai_engine', 'ai_engine.db', 'ai_engine.comm', 'ai_engine.core',
         'ai_engine.conditions', 'ai_engine.data', 'ai_engine.learning',
-    ],
-    datas=[
-        ('ai_engine', 'ai_engine'),
-        ('engine_config.json', '.'),
-    ],
+    ] + np_h + pd_h,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
