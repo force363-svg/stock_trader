@@ -55,12 +55,11 @@ class LSApi:
             "appsecretkey" : self.app_secret,
             "scope"        : "oob"
         }
-        timeout = 10
+        timeout = 30 if self.mode == "mock" else 10
         verify = False if self.mode == "mock" else True
         try:
             import urllib3
-            if self.mode == "mock":
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             res = requests.post(url, headers=headers, data=data, timeout=timeout, verify=verify)
             res.raise_for_status()
             result = res.json()
