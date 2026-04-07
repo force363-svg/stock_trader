@@ -2503,15 +2503,32 @@ class MainWindow(QMainWindow):
 #  실행 진입점
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
+    _log_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
+    _log_path = os.path.join(_log_dir, "startup.log")
+
+    def _log(msg):
+        try:
+            with open(_log_path, "a", encoding="utf-8") as _f:
+                _f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
+
     try:
+        _log("=== 시작 ===")
         app = QApplication(sys.argv)
+        _log("QApplication 생성 완료")
         app.setStyle("Fusion")
+        _log("MainWindow 생성 시작")
         window = MainWindow()
+        _log("MainWindow 생성 완료")
         window.show()
-        sys.exit(app.exec_())
-    except Exception as _e:
+        _log("window.show() 완료 - 이벤트 루프 시작")
+        code = app.exec_()
+        _log(f"이벤트 루프 종료 (code={code})")
+        sys.exit(code)
+    except BaseException as _e:
         import traceback
-        _log_path = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)), "crash.log")
-        with open(_log_path, "w", encoding="utf-8") as _f:
+        _log(f"오류 발생: {type(_e).__name__}: _e")
+        with open(_log_path, "a", encoding="utf-8") as _f:
             traceback.print_exc(file=_f)
         raise
