@@ -12,14 +12,15 @@ class LSApi:
     def __init__(self, mode="real"):
         self.config = load_config()
         self.mode = mode
+        # 실전 API 키 하나로 두 서버 모두 접속
+        # - 실전(real): 포트 8080 → 실계좌 주문
+        # - 모의(mock): 포트 29443 → 모의계좌 주문 (실제 체결, 가상 머니)
+        self.app_key    = self.config["api"].get("ls_app_key", "")
+        self.app_secret = self.config["api"].get("ls_app_secret", "")
         if mode == "mock":
-            self.base_url   = URL_MOCK
-            self.app_key    = self.config["api"].get("ls_mock_key", "")
-            self.app_secret = self.config["api"].get("ls_mock_secret", "")
+            self.base_url = URL_MOCK  # 포트 29443 (LS 모의투자 서버)
         else:
-            self.base_url   = URL_REAL
-            self.app_key    = self.config["api"].get("ls_app_key", "")
-            self.app_secret = self.config["api"].get("ls_app_secret", "")
+            self.base_url = URL_REAL  # 포트 8080 (LS 실전투자 서버)
         self.access_token = None
         self.token_expire_at = 0   # 토큰 만료 시각 (unix timestamp)
         self.last_error = ""
@@ -40,8 +41,7 @@ class LSApi:
     def get_token(self):
         # 앱키 유효성 검사
         if not self.app_key or not self.app_secret:
-            mode_name = "모의투자" if self.mode == "mock" else "실투자"
-            self.last_error = f"{mode_name} App Key/Secret이 비어있습니다. 설정에서 입력하세요."
+            self.last_error = "App Key/Secret이 비어있습니다. 설정에서 실전 API 키를 입력하세요."
             print(f"[LS API] ❌ {self.last_error}")
             return False
 
@@ -83,7 +83,7 @@ class LSApi:
             print(f"[LS API] ❌ {self.last_error}: {e}")
             return False
         except requests.exceptions.Timeout:
-            self.last_error = f"LS 서버 응답 시간 초과 - 포트 {'29443 차단됨' if self.mode == 'mock' else '8080'}"
+            self.last_error = f"LS 서버 응답 시간 초과 - 포트 {'29443' if self.mode == 'mock' else '8080'}"
             print(f"[LS API] ❌ {self.last_error}")
             return False
         except Exception as e:
@@ -115,15 +115,16 @@ class LSApi:
                 "UprcTpCd"   : "0"
             }
         }
+        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAQ12300"),
-                                json=body, timeout=10)
+                                json=body, timeout=10, verify=verify)
             # 401: 토큰 만료 → 재발급 후 1회 재시도
             if res.status_code == 401:
                 print("[LS API] 토큰 만료 - 재발급 시도")
                 if self.get_token():
                     res = requests.post(url, headers=self._headers("CSPAQ12300"),
-                                        json=body, timeout=10)
+                                        json=body, timeout=10, verify=verify)
                 else:
                     return None
             res.raise_for_status()
@@ -237,9 +238,10 @@ class LSApi:
                 "shcode": stock_code
             }
         }
+        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("t1102"),
-                                json=body, timeout=10)
+                                json=body, timeout=10, verify=verify)
             res.raise_for_status()
             data = res.json()
             out = data.get("t1102OutBlock", {})
@@ -252,7 +254,7 @@ class LSApi:
     #  주식 매수 주문 (CSPAT00601)
     # ─────────────────────────────────────
     def buy_order(self, stock_code, qty, price=0):
-        """price=0 이면 시장가 주문"""
+        """price=0 이면 시장가 주문. 실전/모의 모두 실제 체결"""
         if not self.access_token:
             if not self.get_token():
                 return None
@@ -271,12 +273,14 @@ class LSApi:
                 "OrdCndiTpCd" : "0"
             }
         }
+        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAT00601"),
-                                json=body, timeout=10)
+                                json=body, timeout=10, verify=verify)
             res.raise_for_status()
             data = res.json()
-            print(f"[LS API] ✅ 매수 주문 완료 - {stock_code} {qty}주")
+            mode_tag = "[모의]" if self.mode == "mock" else ""
+            print(f"[LS API] ✅ {mode_tag}매수 주문 완료 - {stock_code} {qty}주")
             return data
         except Exception as e:
             print(f"[LS API] ❌ 매수 주문 실패: {e}")
@@ -286,6 +290,7 @@ class LSApi:
     #  주식 매도 주문 (CSPAT00601)
     # ─────────────────────────────────────
     def sell_order(self, stock_code, qty, price=0):
+        """실전/모의 모두 실제 체결"""
         if not self.access_token:
             if not self.get_token():
                 return None
@@ -304,12 +309,14 @@ class LSApi:
                 "OrdCndiTpCd" : "0"
             }
         }
+        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAT00601"),
-                                json=body, timeout=10)
+                                json=body, timeout=10, verify=verify)
             res.raise_for_status()
             data = res.json()
-            print(f"[LS API] ✅ 매도 주문 완료 - {stock_code} {qty}주")
+            mode_tag = "[모의]" if self.mode == "mock" else ""
+            print(f"[LS API] ✅ {mode_tag}매도 주문 완료 - {stock_code} {qty}주")
             return data
         except Exception as e:
             print(f"[LS API] ❌ 매도 주문 실패: {e}")

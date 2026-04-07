@@ -224,8 +224,6 @@ class SettingsDialog(QDialog):
         self.spin_loss.setValue(c["profit"]["loss_cut"])
         self.edit_ls_key.setText(c["api"].get("ls_app_key", ""))
         self.edit_ls_secret.setText(c["api"].get("ls_app_secret", ""))
-        self.edit_mock_key.setText(c["api"].get("ls_mock_key", ""))
-        self.edit_mock_secret.setText(c["api"].get("ls_mock_secret", ""))
         self.edit_krx_key.setText(c["api"].get("krx_key", ""))
         self.edit_kakao.setText(c["notify"]["kakao_token"])
         self.edit_telegram.setText(c["notify"]["telegram_token"])
@@ -244,8 +242,6 @@ class SettingsDialog(QDialog):
         self.config["profit"]["loss_cut"]      = self.spin_loss.value()
         self.config["api"]["ls_app_key"]       = self.edit_ls_key.text()
         self.config["api"]["ls_app_secret"]    = self.edit_ls_secret.text()
-        self.config["api"]["ls_mock_key"]      = self.edit_mock_key.text()
-        self.config["api"]["ls_mock_secret"]   = self.edit_mock_secret.text()
         self.config["api"]["krx_key"]          = self.edit_krx_key.text()
         self.config["notify"]["kakao_token"]   = self.edit_kakao.text()
         self.config["notify"]["telegram_token"]= self.edit_telegram.text()
@@ -400,8 +396,8 @@ class SettingsDialog(QDialog):
         self.edit_cert_path.setPlaceholderText("실투자 시 공인인증서 폴더 경로 (선택)")
         grid_login.addWidget(self.edit_cert_path, 2, 1)
 
-        # 실투자 API (실계좌)
-        grp_real = QGroupBox("실투자 API (실계좌)")
+        # LS투자증권 API (실전/모의 공용)
+        grp_real = QGroupBox("LS투자증권 API (실전/모의 공용)")
         grid_real = QGridLayout(grp_real)
         grid_real.addWidget(QLabel("App Key:"), 0, 0)
         self.edit_ls_key = QLineEdit()
@@ -410,23 +406,9 @@ class SettingsDialog(QDialog):
         self.edit_ls_secret = QLineEdit()
         self.edit_ls_secret.setEchoMode(QLineEdit.Password)
         grid_real.addWidget(self.edit_ls_secret, 1, 1)
-        note_real = QLabel("* LS투자증권 OpenAPI에서 실투자용 키 발급")
+        note_real = QLabel("* 실전 API 키 하나로 실전투자(포트 8080) / 모의투자(포트 29443) 모두 사용")
         note_real.setStyleSheet("color: #888; font-size: 10px;")
         grid_real.addWidget(note_real, 2, 0, 1, 2)
-
-        # 모의투자 API (모의계좌)
-        grp_mock = QGroupBox("모의투자 API (모의계좌)")
-        grid_mock = QGridLayout(grp_mock)
-        grid_mock.addWidget(QLabel("App Key:"), 0, 0)
-        self.edit_mock_key = QLineEdit()
-        grid_mock.addWidget(self.edit_mock_key, 0, 1)
-        grid_mock.addWidget(QLabel("App Secret:"), 1, 0)
-        self.edit_mock_secret = QLineEdit()
-        self.edit_mock_secret.setEchoMode(QLineEdit.Password)
-        grid_mock.addWidget(self.edit_mock_secret, 1, 1)
-        note_mock = QLabel("* LS투자증권 OpenAPI에서 모의투자용 키 발급 (포트 29443)")
-        note_mock.setStyleSheet("color: #888; font-size: 10px;")
-        grid_mock.addWidget(note_mock, 2, 0, 1, 2)
 
         # 한국거래소(KRX) API
         grp_krx = QGroupBox("한국거래소(KRX) API")
@@ -437,7 +419,6 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(grp_login)
         layout.addWidget(grp_real)
-        layout.addWidget(grp_mock)
         layout.addWidget(grp_krx)
         layout.addStretch()
         return w
@@ -509,18 +490,126 @@ class SettingsDialog(QDialog):
 
 
 # ─────────────────────────────────────────────
+#  로그인 다이얼로그 (실전/모의 선택)
+# ─────────────────────────────────────────────
+class LoginDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("주식 자동매매 시스템")
+        self.setFixedSize(460, 340)
+        self.setStyleSheet(DARK_STYLE)
+        self.selected_mode = None
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(14)
+
+        # 타이틀
+        title = QLabel("📈 주식 자동매매 시스템")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: #ffffff; font-size: 18px; font-weight: bold; padding: 8px;")
+        layout.addWidget(title)
+
+        # API 키 상태 표시
+        config = load_config()
+        has_keys = bool(config["api"].get("ls_app_key") and config["api"].get("ls_app_secret"))
+        if not has_keys:
+            warn = QLabel("⚠️ API 키 미설정 - 아래 [API 키 설정] 버튼을 눌러 실전 키를 먼저 입력하세요")
+            warn.setAlignment(Qt.AlignCenter)
+            warn.setWordWrap(True)
+            warn.setStyleSheet(
+                "color: #fdcb6e; font-size: 12px; padding: 8px; "
+                "background-color: #2d2400; border: 1px solid #fdcb6e; border-radius: 4px;"
+            )
+            layout.addWidget(warn)
+        else:
+            ok = QLabel("✅ API 키 설정 완료 - 투자 모드를 선택하세요")
+            ok.setAlignment(Qt.AlignCenter)
+            ok.setStyleSheet(
+                "color: #00b894; font-size: 12px; padding: 6px; "
+                "background-color: #00241a; border: 1px solid #00b894; border-radius: 4px;"
+            )
+            layout.addWidget(ok)
+
+        # 모드 선택 버튼
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+
+        btn_real = QPushButton("📊 실전투자 시작")
+        btn_real.setMinimumHeight(56)
+        btn_real.setStyleSheet(
+            "background-color: #c0392b; color: #fff; font-size: 14px; "
+            "font-weight: bold; border: none; border-radius: 6px;"
+        )
+        btn_real.clicked.connect(lambda: self._select("real"))
+
+        btn_mock = QPushButton("🎮 모의투자 시작")
+        btn_mock.setMinimumHeight(56)
+        btn_mock.setStyleSheet(
+            "background-color: #0984e3; color: #fff; font-size: 14px; "
+            "font-weight: bold; border: none; border-radius: 6px;"
+        )
+        btn_mock.clicked.connect(lambda: self._select("mock"))
+
+        btn_row.addWidget(btn_real)
+        btn_row.addWidget(btn_mock)
+        layout.addLayout(btn_row)
+
+        # 설명
+        note = QLabel(
+            "• 실전투자: 포트 8080 접속 → 실계좌 실제 매수/매도\n"
+            "• 모의투자: 포트 29443 접속 → 모의계좌 실제 매수/매도 (가상머니)"
+        )
+        note.setAlignment(Qt.AlignCenter)
+        note.setStyleSheet("color: #888; font-size: 11px; padding: 4px;")
+        layout.addWidget(note)
+
+        # 설정 버튼
+        btn_settings = QPushButton("⚙️ API 키 설정")
+        btn_settings.setStyleSheet("background-color: #533483; color: #fff; border: none; padding: 6px;")
+        btn_settings.clicked.connect(self._open_settings)
+        layout.addWidget(btn_settings)
+
+    def _select(self, mode):
+        from PyQt5.QtWidgets import QMessageBox
+        config = load_config()
+        has_keys = bool(config["api"].get("ls_app_key") and config["api"].get("ls_app_secret"))
+        if not has_keys:
+            QMessageBox.warning(self, "API 키 미설정",
+                                "실전 App Key/Secret을 먼저 설정에서 입력하세요.")
+            return
+        self.selected_mode = mode
+        self.accept()
+
+    def _open_settings(self):
+        dlg = SettingsDialog(self)
+        dlg.exec_()
+        # 설정 저장 후 화면 다시 그리기
+        self._rebuild_ui()
+
+    def _rebuild_ui(self):
+        # 레이아웃 초기화 후 재구성
+        while self.layout().count():
+            item = self.layout().takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._build_ui()
+
+
+# ─────────────────────────────────────────────
 #  메인 윈도우
 # ─────────────────────────────────────────────
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, trade_mode="real"):
         super().__init__()
         self.setWindowTitle("주식 자동매매 시스템 v1.1")
         self.setMinimumSize(1280, 800)
         self.setStyleSheet(DARK_STYLE)
 
-        # API 초기화
-        config = load_config()
-        self.trade_mode = config["api"].get("trade_mode", "real")
+        # API 초기화 (로그인 화면에서 선택한 모드 사용)
+        self.trade_mode = trade_mode
         self.api = LSApi(mode=self.trade_mode)
         self.api_connected = False
         self.is_trading = False
@@ -1472,6 +1561,12 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    window = MainWindow()
+
+    # 로그인 다이얼로그: 실전/모의 선택
+    login = LoginDialog()
+    if login.exec_() != QDialog.Accepted:
+        sys.exit(0)
+
+    window = MainWindow(trade_mode=login.selected_mode)
     window.show()
     sys.exit(app.exec_())
