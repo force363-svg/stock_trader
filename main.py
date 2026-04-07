@@ -677,6 +677,45 @@ class SettingsDialog(QDialog):
 
 
 # ─────────────────────────────────────────────
+#  데이터 조회 백그라운드 스레드
+#  모든 API 호출을 메인 스레드 밖에서 실행
+# ─────────────────────────────────────────────
+class DataFetchThread(QThread):
+    done = pyqtSignal(dict)   # 완료 시 결과 dict 전달
+
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+
+    def run(self):
+        result = {}
+        try:
+            result["holdings"], result["summary"] = self.api.get_holdings_for_ui()
+        except Exception as e:
+            result["holdings"], result["summary"] = [], {}
+            result["error_holdings"] = str(e)
+
+        try:
+            result["kospi"]  = self.api.get_market_index("001")
+            result["kosdaq"] = self.api.get_market_index("301")
+        except Exception as e:
+            result["error_index"] = str(e)
+
+        try:
+            result["sectors"] = self.api.get_sector_indices()
+        except Exception as e:
+            result["sectors"] = []
+            result["error_sectors"] = str(e)
+
+        try:
+            result["themes"] = self.api.get_themes()
+        except Exception as e:
+            result["themes"] = []
+
+        self.done.emit(result)
+
+
+# ─────────────────────────────────────────────
 #  AI 엔진 백그라운드 스레드
 # ─────────────────────────────────────────────
 class AIEngineThread(QThread):
@@ -780,9 +819,10 @@ class MainWindow(QMainWindow):
         self.api = LSApi(mode=self.trade_mode)
         self.api_connected = False
         self.is_trading = False
-        self.holdings_data = []  # 보유종목 원본 데이터
-        self.ai_signals    = []  # AI 신호 캐시
-        self.ai_thread     = None  # AI 엔진 스레드
+        self.holdings_data  = []   # 보유종목 원본 데이터
+        self.ai_signals     = []   # AI 신호 캐시
+        self.ai_thread      = None # AI 엔진 스레드
+        self._fetch_thread  = None # 데이터 조회 스레드 (API 블로킹 방지)
 
         self._build_ui()
         self._init_api()
@@ -833,19 +873,48 @@ class MainWindow(QMainWindow):
             self.log_area.append(f"[{now}] ❌ API 오류: {e}")
 
     def refresh_data(self):
-        """보유종목 + 계좌요약 업데이트"""
+        """백그라운드 스레드로 API 데이터 조회 시작 (UI 블로킹 없음)"""
         if not self.api_connected:
             return
-        try:
-            holdings, summary = self.api.get_holdings_for_ui()
+        # 이미 조회 중이면 중복 실행 방지
+        if self._fetch_thread and self._fetch_thread.isRunning():
+            return
+        self._fetch_thread = DataFetchThread(self.api)
+        self._fetch_thread.done.connect(self._on_fetch_done)
+        self._fetch_thread.start()
+
+    def _on_fetch_done(self, result: dict):
+        """백그라운드 조회 완료 → UI 업데이트 (메인 스레드에서 안전하게 실행)"""
+        now = datetime.now().strftime("%H:%M:%S")
+
+        # 보유종목 + 계좌요약
+        holdings = result.get("holdings", [])
+        summary  = result.get("summary", {})
+        if holdings is not None:
             self.holdings_data = holdings
             self._update_holdings_table(holdings)
+        if summary:
             self._update_summary(summary)
-            now = datetime.now().strftime("%H:%M:%S")
-            self.time_label.setText(f"⏱ {now} 업데이트")
-        except Exception as e:
-            now = datetime.now().strftime("%H:%M:%S")
-            self.log_area.append(f"[{now}] ❌ 데이터 갱신 실패: {e}")
+
+        # 오류 로그
+        if "error_holdings" in result:
+            self.log_area.append(f"[{now}] ❌ 잔고 조회 실패: {result['error_holdings']}")
+
+        # 시장지수 (KOSPI/KOSDAQ)
+        self._apply_market_index("KOSPI",  result.get("kospi"))
+        self._apply_market_index("KOSDAQ", result.get("kosdaq"))
+
+        # 업종지수 차트
+        sectors = result.get("sectors", [])
+        if sectors:
+            self._apply_sector_table(sectors)
+
+        # 상승테마
+        themes = result.get("themes", [])
+        if themes:
+            self._update_theme_section(themes)
+
+        self.time_label.setText(f"⏱ {now} 업데이트")
 
 # ── AI 신호 파일 읽기 (10초마다) ──
     def _update_ai_signals(self):
@@ -915,48 +984,36 @@ class MainWindow(QMainWindow):
 
         self.ai_signals = signals
 
-    def _update_market_index(self):
-        """KOSPI/KOSDAQ 지수 업데이트"""
-        # upcode: KOSPI=001, KOSDAQ=301 (t1511 기준)
-        for name, upcode in [("KOSPI", "001"), ("KOSDAQ", "301")]:
-            if name not in self.market_labels:
-                continue
-            data = self.api.get_market_index(upcode)
-            if not data:
-                continue
-            try:
-                row = data[0] if isinstance(data, list) else data
-                price = float(str(row.get("pricejisu", 0)).replace(",", ""))
-                # sign: 1=상승, 2=하락, 3=보합 / change: 대비값
-                try:
-                    chg_val = float(str(row.get("change", 0)).replace(",", ""))
-                except:
-                    chg_val = 0.0
-                sign_cd = str(row.get("sign", "3"))
-                prev = price - chg_val
-                if prev > 0:
-                    rt = chg_val / prev * 100
-                    if sign_cd == "2":
-                        rt = -abs(rt)
-                    elif sign_cd == "1":
-                        rt = abs(rt)
-                else:
-                    rt = 0.0
-                val_lbl, chg_lbl = self.market_labels[name]
-                val_lbl.setText(f"{price:,.2f}")
-                sign_str = "+" if rt >= 0 else ""
-                color = "#ff6b6b" if rt >= 0 else "#74b9ff"
-                chg_lbl.setText(f"{sign_str}{rt:.2f}%")
-                chg_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
-            except Exception as e:
-                print(f"[시장지수] {name} 파싱 실패: {e}")
-
-    def _update_sector_table(self):
-        """업종지수 차트형 카드로 업데이트"""
-        if not hasattr(self, 'sector_chart_layout'):
+    def _apply_market_index(self, name: str, data):
+        """KOSPI/KOSDAQ 지수 UI 적용 (메인 스레드)"""
+        if not data or name not in self.market_labels:
             return
-        sectors = self.api.get_sector_indices()
-        if not sectors:
+        try:
+            row = data[0] if isinstance(data, list) else data
+            price = float(str(row.get("pricejisu", 0)).replace(",", ""))
+            try:
+                chg_val = float(str(row.get("change", 0)).replace(",", ""))
+            except:
+                chg_val = 0.0
+            sign_cd = str(row.get("sign", "3"))
+            prev = price - chg_val
+            if prev > 0:
+                rt = chg_val / prev * 100
+                rt = -abs(rt) if sign_cd == "2" else abs(rt)
+            else:
+                rt = 0.0
+            val_lbl, chg_lbl = self.market_labels[name]
+            val_lbl.setText(f"{price:,.2f}")
+            sign_str = "+" if rt >= 0 else ""
+            color = "#ff6b6b" if rt >= 0 else "#74b9ff"
+            chg_lbl.setText(f"{sign_str}{rt:.2f}%")
+            chg_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+        except Exception as e:
+            print(f"[시장지수] {name} 파싱 실패: {e}")
+
+    def _apply_sector_table(self, sectors: list):
+        """업종지수 차트형 카드 UI 적용 (메인 스레드)"""
+        if not hasattr(self, 'sector_chart_layout') or not sectors:
             return
 
         # 기존 카드 제거 (stretch 남김)
@@ -1468,8 +1525,9 @@ class MainWindow(QMainWindow):
 
         # 상승테마
         theme_grp = QGroupBox("🔥 상승테마")
-        theme_layout = QVBoxLayout(theme_grp)
-        theme_layout.setSpacing(4)
+        self.theme_layout = QVBoxLayout(theme_grp)
+        self.theme_layout.setSpacing(4)
+        theme_layout = self.theme_layout
 
         self.theme_stocks = {
             "2차전지": [("LG에너지솔루션","385,500","+4.21%"),("삼성SDI","420,000","+3.87%"),("SK이노베이션","125,500","+2.94%"),("에코프로","182,000","+5.12%"),("포스코퓨처엠","320,000","+3.45%")],
@@ -1675,6 +1733,40 @@ class MainWindow(QMainWindow):
             self.refresh_data()  # 잔고 갱신
         else:
             self.log_area.append(f"[{now}] ❌ 매도 실패: {name}")
+
+    def _update_theme_section(self, themes: list):
+        """API에서 받은 테마 데이터로 카드 갱신 (메인 스레드)"""
+        if not hasattr(self, 'theme_layout') or not themes:
+            return
+        # 기존 카드 제거
+        while self.theme_layout.count():
+            item = self.theme_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for t in themes[:10]:
+            name  = t.get("name", "")
+            diff  = t.get("diff", 0.0)
+            diff_str = t.get("diff_str", f"{diff:+.2f}%")
+            color = "#ff6b6b" if diff >= 0 else "#74b9ff"
+
+            card = QFrame()
+            card.setStyleSheet(
+                f"background-color: #16213e; border-left: 3px solid {color}; border-radius: 4px;"
+            )
+            card.setCursor(Qt.PointingHandCursor)
+            cl = QHBoxLayout(card)
+            cl.setContentsMargins(8, 5, 8, 5)
+
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet("color: #fff; font-size: 12px; font-weight: bold;")
+            chg_lbl = QLabel(diff_str)
+            chg_lbl.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
+
+            cl.addWidget(name_lbl)
+            cl.addStretch()
+            cl.addWidget(chg_lbl)
+            self.theme_layout.addWidget(card)
 
     def show_theme_stocks(self, theme):
         stocks = self.theme_stocks.get(theme, [])
@@ -1973,10 +2065,12 @@ class MainWindow(QMainWindow):
 
 
     def closeEvent(self, event):
-        """창 닫을 때 AI 엔진 스레드 정지"""
+        """창 닫을 때 백그라운드 스레드 정리"""
         if self.ai_thread and self.ai_thread.isRunning():
             self.ai_thread.stop()
             self.ai_thread.wait(3000)
+        if self._fetch_thread and self._fetch_thread.isRunning():
+            self._fetch_thread.wait(3000)
         event.accept()
 
 
