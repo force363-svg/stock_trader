@@ -927,6 +927,7 @@ class AIEngineThread(QThread):
             scanner    = Scanner(fetcher)
             last_scan  = 0
             last_learn = ""
+            last_closing = ""
             import json as _json
             import time
             from datetime import datetime
@@ -962,6 +963,50 @@ class AIEngineThread(QThread):
                     except Exception as e:
                         self.status_signal.emit(f"[AI엔진] 학습 오류: {e}")
                     last_learn = today
+
+                # 장마감 최종 판단 스캔 (15:29~15:31, 1일 1회)
+                # 보유종목 대상으로 최종 매도/보유 판단 후 저장
+                if "15:29" <= now_hm <= "15:31" and last_closing != today:
+                    self.status_signal.emit("[AI엔진] 🔔 장마감 보유종목 최종 판단 중...")
+                    try:
+                        from ai_engine.core.scanner import _load_holdings_cache
+                        from ai_engine.core.signal_generator import generate_sell_signal
+                        held = _load_holdings_cache()
+                        closing_signals = []
+                        for h in held:
+                            code = h.get("code", "")
+                            name = h.get("name", "")
+                            if not code:
+                                continue
+                            try:
+                                data = scanner._fetch_data(code)
+                                sig  = generate_sell_signal(code, name, data, h)
+                                if sig:
+                                    closing_signals.append(sig)
+                                else:
+                                    # 매도 사유 없음 → 보유 신호
+                                    closing_signals.append({
+                                        "stock_code"  : code,
+                                        "stock_name"  : name,
+                                        "signal_type" : "HOLD",
+                                        "score"       : 0,
+                                        "current_price": 0,
+                                        "stop_loss"   : 0,
+                                        "target_price": 0,
+                                        "confidence"  : "MEDIUM",
+                                    })
+                            except Exception:
+                                pass
+                        if closing_signals:
+                            write_signals(closing_signals, scan_count=len(held))
+                            sell_cnt = sum(1 for s in closing_signals if s["signal_type"] == "SELL")
+                            hold_cnt = sum(1 for s in closing_signals if s["signal_type"] == "HOLD")
+                            self.status_signal.emit(
+                                f"[AI엔진] ✅ 장마감 판단 완료 → 매도:{sell_cnt} 보유:{hold_cnt}"
+                            )
+                        last_closing = today
+                    except Exception as e:
+                        self.status_signal.emit(f"[AI엔진] 장마감 판단 오류: {e}")
 
                 # 장중 스캔
                 if "09:00" <= now_hm <= "15:30":
@@ -1232,14 +1277,17 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'holdings_table'):
             return
         sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
+        hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
         for row in range(self.holdings_table.rowCount()):
             if row >= len(self.holdings_data):
                 break
             code = self.holdings_data[row].get("raw_code", "")
             if code in sell_codes:
                 ai_text, ai_color = "매도", "#ff6b6b"
-            else:
+            elif code in hold_codes:
                 ai_text, ai_color = "보유", "#fdcb6e"
+            else:
+                ai_text, ai_color = "대기중", "#636e72"   # 아직 스캔 안 됨
             item = self.holdings_table.item(row, 8)
             if item is None:
                 item = QTableWidgetItem()
@@ -1914,8 +1962,10 @@ class MainWindow(QMainWindow):
             hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
             if code in sell_codes:
                 ai_text, ai_color = "매도", "#ff6b6b"
-            else:
+            elif code in hold_codes:
                 ai_text, ai_color = "보유", "#fdcb6e"
+            else:
+                ai_text, ai_color = "대기중", "#636e72"
             ai_item = QTableWidgetItem(ai_text)
             ai_item.setTextAlignment(Qt.AlignCenter)
             ai_item.setForeground(QColor(ai_color))
