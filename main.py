@@ -1203,6 +1203,8 @@ class MainWindow(QMainWindow):
         signals    = data.get("signals", [])
         scan_count = data.get("scan_count", 0)
         timestamp  = data.get("timestamp", "")[:16].replace("T", " ")
+        # 스캔 날짜 저장 (오늘 스캔 여부 판단용)
+        self._ai_signal_date = data.get("timestamp", "")[:10]
 
         buy_signals  = [s for s in signals if s.get("signal_type") == "BUY"]
         all_scanned  = sorted(signals, key=lambda x: x.get("score", 0), reverse=True)
@@ -1278,6 +1280,9 @@ class MainWindow(QMainWindow):
             return
         sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
         hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
+        # 오늘 스캔 여부 확인 (ai_signals_timestamp가 오늘이면 스캔 완료)
+        scanned_today = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
+
         for row in range(self.holdings_table.rowCount()):
             if row >= len(self.holdings_data):
                 break
@@ -1286,8 +1291,11 @@ class MainWindow(QMainWindow):
                 ai_text, ai_color = "매도", "#ff6b6b"
             elif code in hold_codes:
                 ai_text, ai_color = "보유", "#fdcb6e"
+            elif scanned_today:
+                # 오늘 스캔 완료됐는데 신호 없음 = 매도 사유 없음 → 보유
+                ai_text, ai_color = "보유", "#fdcb6e"
             else:
-                ai_text, ai_color = "대기중", "#636e72"   # 아직 스캔 안 됨
+                ai_text, ai_color = "대기중", "#636e72"
             item = self.holdings_table.item(row, 8)
             if item is None:
                 item = QTableWidgetItem()
