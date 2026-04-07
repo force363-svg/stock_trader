@@ -316,6 +316,70 @@ class LSApi:
             print(f"[LS API] ❌ 매도 주문 실패: {e}")
             return None
 
+    # ─────────────────────────────────────
+    #  주가지수 조회 (t1511) - KOSPI/KOSDAQ
+    # ─────────────────────────────────────
+    def get_market_index(self, shcode="001"):
+        """shcode: 001=KOSPI, 101=KOSDAQ"""
+        if not self.ensure_token():
+            return None
+        url = f"{self.base_url}/stock/market-data"
+        body = {"t1511InBlock": {"shcode": shcode}}
+        try:
+            res = requests.post(url, headers=self._headers("t1511"),
+                                json=body, timeout=10)
+            res.raise_for_status()
+            return res.json().get("t1511OutBlock", {})
+        except Exception as e:
+            print(f"[LS API] ❌ 지수 조회 실패({shcode}): {e}")
+            return None
+
+    # ─────────────────────────────────────
+    #  업종지수 조회 (t8424)
+    # ─────────────────────────────────────
+    def get_sector_indices(self):
+        """주요 업종지수 조회"""
+        if not self.ensure_token():
+            return []
+        # 업종코드: 013=전기전자, 009=의약품, 020=금융업, 015=운수장비, 011=철강금속, 024=서비스업
+        sector_codes = [
+            ("전기전자", "013"),
+            ("의약품",   "009"),
+            ("금융",     "020"),
+            ("자동차",   "015"),
+            ("철강금속", "011"),
+            ("서비스",   "024"),
+        ]
+        results = []
+        url = f"{self.base_url}/stock/market-data"
+        for name, code in sector_codes:
+            body = {"t8424InBlock": {"upcode": code}}
+            try:
+                res = requests.post(url, headers=self._headers("t8424"),
+                                    json=body, timeout=5)
+                res.raise_for_status()
+                data = res.json().get("t8424OutBlock", {})
+                if data:
+                    pricejisu = float(data.get("pricejisu", 0))
+                    jniljisu  = float(data.get("jniljisu", 0))
+                    if jniljisu > 0:
+                        change = ((pricejisu - jniljisu) / jniljisu) * 100
+                    else:
+                        change = 0.0
+                    sign = "+" if change >= 0 else ""
+                    results.append({
+                        "name":    name,
+                        "index":   f"{pricejisu:,.2f}",
+                        "change":  f"{sign}{change:.2f}%",
+                        "foreign": "-",
+                        "inst":    "-",
+                    })
+            except Exception as e:
+                print(f"[LS API] 업종({name}) 조회 실패: {e}")
+                results.append({"name": name, "index": "-", "change": "-",
+                                 "foreign": "-", "inst": "-"})
+        return results
+
 
 # ─────────────────────────────────────
 #  테스트 실행

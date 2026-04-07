@@ -680,19 +680,65 @@ class MainWindow(QMainWindow):
             self.log_area.append(f"[{now}] ❌ API 오류: {e}")
 
     def refresh_data(self):
-        """보유종목 + 계좌요약 업데이트"""
+        """보유종목 + 계좌요약 + 시장지수 업데이트"""
         if not self.api_connected:
             return
         try:
+            # 보유종목 + 계좌요약
             holdings, summary = self.api.get_holdings_for_ui()
             self.holdings_data = holdings
             self._update_holdings_table(holdings)
             self._update_summary(summary)
+            # 시장지수 (KOSPI/KOSDAQ)
+            self._update_market_index()
+            # 업종지수
+            self._update_sector_table()
             now = datetime.now().strftime("%H:%M:%S")
             self.time_label.setText(f"⏱ {now} 업데이트")
         except Exception as e:
             now = datetime.now().strftime("%H:%M:%S")
             self.log_area.append(f"[{now}] ❌ 데이터 갱신 실패: {e}")
+
+    def _update_market_index(self):
+        """KOSPI/KOSDAQ 지수 업데이트"""
+        for name, shcode in [("KOSPI", "001"), ("KOSDAQ", "101")]:
+            if name not in self.market_labels:
+                continue
+            data = self.api.get_market_index(shcode)
+            if not data:
+                continue
+            try:
+                price = float(data.get("pricejisu", data.get("price", 0)))
+                jnilclose = float(data.get("jnilclose", data.get("jniljisu", 0)))
+                if jnilclose > 0:
+                    change = ((price - jnilclose) / jnilclose) * 100
+                else:
+                    change = float(data.get("debi", 0))
+                val_lbl, chg_lbl = self.market_labels[name]
+                val_lbl.setText(f"{price:,.2f}")
+                sign = "+" if change >= 0 else ""
+                color = "#ff6b6b" if change >= 0 else "#74b9ff"
+                chg_lbl.setText(f"{sign}{change:.2f}%")
+                chg_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+            except Exception as e:
+                print(f"[시장지수] {name} 파싱 실패: {e}")
+
+    def _update_sector_table(self):
+        """업종지수 테이블 업데이트"""
+        if not hasattr(self, 'sector_table'):
+            return
+        sectors = self.api.get_sector_indices()
+        if not sectors:
+            return
+        self.sector_table.setRowCount(len(sectors))
+        for r, s in enumerate(sectors):
+            vals = [s["name"], s["index"], s["change"], s["foreign"], s["inst"]]
+            for c, val in enumerate(vals):
+                item = QTableWidgetItem(val)
+                item.setTextAlignment(Qt.AlignCenter)
+                if c == 2 and val not in ["-", ""]:
+                    item.setForeground(QColor("#ff6b6b") if val.startswith("+") else QColor("#74b9ff"))
+                self.sector_table.setItem(r, c, item)
 
     def _build_ui(self):
         central = QWidget()
@@ -809,39 +855,34 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 2, 12, 2)
         layout.setSpacing(0)
 
-        market_data = [
-            ("KOSPI",    "2,634.82", "+0.43%",  "#ff6b6b"),
-            ("KOSDAQ",   "856.14",   "+0.87%",  "#ff6b6b"),
-            ("환율(USD)", "1,328.50", "-0.12%",  "#74b9ff"),
-            ("외국인",    "+2,847억", "순매수",   "#ff6b6b"),
-            ("기관",      "+1,203억", "순매수",   "#ff6b6b"),
-            ("거래대금",  "12.4조",   "KOSPI",   "#a0c4ff"),
-        ]
+        # 동적 업데이트용 라벨 저장
+        self.market_labels = {}
+        market_items = ["KOSPI", "KOSDAQ"]
 
-        for i, (label, value, change, color) in enumerate(market_data):
+        for i, name in enumerate(market_items):
             item_layout = QHBoxLayout()
             item_layout.setSpacing(4)
 
-            lbl = QLabel(label)
+            lbl = QLabel(name)
             lbl.setStyleSheet("color: #888; font-size: 11px;")
 
-            val = QLabel(value)
-            val.setStyleSheet(f"color: #ffffff; font-size: 12px; font-weight: bold;")
+            val = QLabel("-")
+            val.setStyleSheet("color: #ffffff; font-size: 12px; font-weight: bold;")
 
-            chg = QLabel(change)
-            chg.setStyleSheet(f"color: {color}; font-size: 11px;")
+            chg = QLabel("-")
+            chg.setStyleSheet("color: #888; font-size: 11px;")
+
+            self.market_labels[name] = (val, chg)
 
             item_layout.addWidget(lbl)
             item_layout.addWidget(val)
             item_layout.addWidget(chg)
             layout.addLayout(item_layout)
 
-            # 구분선
-            if i < len(market_data) - 1:
-                sep = QFrame()
-                sep.setFrameShape(QFrame.VLine)
-                sep.setStyleSheet("color: #1e3a5f; margin: 4px 12px;")
-                layout.addWidget(sep)
+            sep = QFrame()
+            sep.setFrameShape(QFrame.VLine)
+            sep.setStyleSheet("color: #1e3a5f; margin: 4px 12px;")
+            layout.addWidget(sep)
 
         layout.addStretch()
 
@@ -925,30 +966,8 @@ class MainWindow(QMainWindow):
         sector_table.setEditTriggers(QTableWidget.NoEditTriggers)
         sector_table.setAlternatingRowColors(True)
         sector_table.setStyleSheet("QTableWidget { alternate-background-color: #1a2744; }")
-        # 업종명 / 지수 / 등락률 / 외국인동향 / 기관동향
-        sectors = [
-            ("반도체",  "3,842.15", "+1.23%", "매수", "매수"),
-            ("2차전지", "2,156.88", "+2.41%", "매수", "매수"),
-            ("바이오",  "8,934.20", "-0.87%", "매도", "중립"),
-            ("자동차",  "1,623.44", "+0.54%", "매수", "매도"),
-            ("금융",    "982.33",   "+0.12%", "중립", "매수"),
-            ("IT",      "4,211.67", "+0.98%", "매수", "중립"),
-        ]
-        sector_table.setRowCount(len(sectors))
-        for r, (name, idx, chg, foreign, inst) in enumerate(sectors):
-            for c, val in enumerate([name, idx, chg, foreign, inst]):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if c == 2:  # 등락률
-                    item.setForeground(QColor("#ff6b6b") if val.startswith("+") else QColor("#74b9ff"))
-                if c in [3, 4]:  # 외국인/기관
-                    if val == "매수":
-                        item.setForeground(QColor("#ff6b6b"))
-                    elif val == "매도":
-                        item.setForeground(QColor("#74b9ff"))
-                    else:
-                        item.setForeground(QColor("#888888"))
-                sector_table.setItem(r, c, item)
+        sector_table.setRowCount(0)  # API 연결 후 채워짐
+        self.sector_table = sector_table
         sector_layout.addWidget(sector_table)
 
         layout.addWidget(grp_sector)
@@ -990,10 +1009,10 @@ class MainWindow(QMainWindow):
         grp.setFixedHeight(140)
 
         recommend_data = [
-            ("1순위", "LG에너지솔루션", "81.3%", "#ff6b6b"),
-            ("2순위", "삼성전자",       "73.2%", "#fdcb6e"),
-            ("3순위", "SK하이닉스",     "68.5%", "#00b894"),
-            ("4순위", "카카오",         "65.1%", "#74b9ff"),
+            ("1순위", "-", "-", "#ff6b6b"),
+            ("2순위", "-", "-", "#fdcb6e"),
+            ("3순위", "-", "-", "#00b894"),
+            ("4순위", "-", "-", "#74b9ff"),
         ]
         for rank, name, prob, color in recommend_data:
             card = QFrame()
@@ -1036,18 +1055,7 @@ class MainWindow(QMainWindow):
         self.search_list.setHorizontalHeaderLabels(["종목명", "현재가", "등락률"])
         self.search_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.search_list.setEditTriggers(QTableWidget.NoEditTriggers)
-        # 샘플
-        stocks = [("삼성전자","73,400","+2.34%"),("SK하이닉스","128,500","+1.87%"),
-                  ("카카오","42,150","+3.12%"),("NAVER","168,000","+0.96%"),
-                  ("LG에너지솔루션","385,500","+4.21%")]
-        self.search_list.setRowCount(len(stocks))
-        for r, (n, p, c) in enumerate(stocks):
-            for col, val in enumerate([n, p, c]):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if col == 2:
-                    item.setForeground(QColor("#ff6b6b") if val.startswith("+") else QColor("#74b9ff"))
-                self.search_list.setItem(r, col, item)
+        self.search_list.setRowCount(0)  # 검색 후 채워짐
 
         # 더블클릭 시 HTS 종목 연동
         self.search_list.cellDoubleClicked.connect(self._on_search_click)
@@ -1070,18 +1078,7 @@ class MainWindow(QMainWindow):
         self.rec_list.setHorizontalHeaderLabels(["순위", "종목명", "상승확률", "현재가"])
         self.rec_list.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.rec_list.setEditTriggers(QTableWidget.NoEditTriggers)
-        rec_data = [("1","LG에너지솔루션","81.3%","385,500"),
-                    ("2","삼성전자","73.2%","73,400"),
-                    ("3","SK하이닉스","68.5%","128,500"),
-                    ("4","카카오","65.1%","42,150")]
-        self.rec_list.setRowCount(len(rec_data))
-        for r, row in enumerate(rec_data):
-            for c, val in enumerate(row):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if c == 2:
-                    item.setForeground(QColor("#00b894"))
-                self.rec_list.setItem(r, c, item)
+        self.rec_list.setRowCount(0)  # 조건식 검색 후 채워짐
 
         # 하단 자동 / 수동 버튼
         btn_row2 = QHBoxLayout()
