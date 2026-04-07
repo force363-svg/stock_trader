@@ -10,9 +10,12 @@ from datetime import datetime
 def get_signals_path():
     if getattr(sys, 'frozen', False):
         base = os.path.dirname(os.path.dirname(sys.executable))
+        exe_name = os.path.basename(sys.executable).lower()
+        fname = "ai_signals_mock.json" if "mock" in exe_name else "ai_signals_real.json"
     else:
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, "ai_signals.json")
+        fname = "ai_signals.json"
+    return os.path.join(base, fname)
 
 
 def write_signals(signals: list, scan_count: int = 0):

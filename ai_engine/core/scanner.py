@@ -47,9 +47,12 @@ def _load_holdings_cache() -> list:
     try:
         if getattr(sys, 'frozen', False):
             base = os.path.dirname(os.path.dirname(sys.executable))
+            exe_name = os.path.basename(sys.executable).lower()
+            fname = "holdings_cache_mock.json" if "mock" in exe_name else "holdings_cache_real.json"
         else:
             base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        path = os.path.join(base, "holdings_cache.json")
+            fname = "holdings_cache.json"
+        path = os.path.join(base, fname)
         if not os.path.exists(path):
             return []
         with open(path, "r", encoding="utf-8") as f:

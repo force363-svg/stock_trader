@@ -1189,9 +1189,12 @@ class MainWindow(QMainWindow):
         """ai_signals.json 읽어서 스캔종목/추천종목 테이블 갱신"""
         if getattr(sys, 'frozen', False):
             base = os.path.dirname(os.path.dirname(sys.executable))
+            exe_name = os.path.basename(sys.executable).lower()
+            fname = "ai_signals_mock.json" if "mock" in exe_name else "ai_signals_real.json"
         else:
             base = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(base, "ai_signals.json")
+            fname = "ai_signals.json"
+        path = os.path.join(base, fname)
 
         if not os.path.exists(path):
             return
@@ -1986,12 +1989,15 @@ class MainWindow(QMainWindow):
             self.holdings_table.setItem(row, 8, ai_item)
 
     def _write_holdings_cache(self, holdings):
-        """AI 엔진이 보유종목 SELL 판단에 쓸 holdings_cache.json 저장"""
+        """AI 엔진이 보유종목 SELL 판단에 쓸 holdings_cache 저장"""
         if getattr(sys, 'frozen', False):
             base = os.path.dirname(os.path.dirname(sys.executable))
+            exe_name = os.path.basename(sys.executable).lower()
+            fname = "holdings_cache_mock.json" if "mock" in exe_name else "holdings_cache_real.json"
         else:
             base = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(base, "holdings_cache.json")
+            fname = "holdings_cache.json"
+        path = os.path.join(base, fname)
         tmp  = path + ".tmp"
         try:
             payload = [
