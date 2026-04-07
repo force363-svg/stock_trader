@@ -22,6 +22,9 @@ class LSApi:
         self.access_token = None
         self.token_expire = None
         self.last_error = ""
+        # 시스템 프록시 우회 세션 (포트 29443 차단 방지)
+        self.session = requests.Session()
+        self.session.trust_env = False  # 시스템 프록시/환경변수 무시
 
     # ─────────────────────────────────────
     #  토큰 발급
@@ -44,8 +47,8 @@ class LSApi:
         verify = self.mode != "mock"
         print(f"[LS API] 토큰 요청: {url} (mode={self.mode}, key={self.app_key[:8]}...)")
         try:
-            res = requests.post(url, headers=headers, data=data,
-                                timeout=30, verify=verify)
+            res = self.session.post(url, headers=headers, data=data,
+                                    timeout=30, verify=verify)
             print(f"[LS API] HTTP {res.status_code}: {res.text[:200]}")
             res.raise_for_status()
             result = res.json()
@@ -94,7 +97,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("CSPAQ12300"),
+            res = self.session.post(url, headers=self._headers("CSPAQ12300"),
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
@@ -209,7 +212,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("t1102"),
+            res = self.session.post(url, headers=self._headers("t1102"),
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
@@ -243,7 +246,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("CSPAT00601"),
+            res = self.session.post(url, headers=self._headers("CSPAT00601"),
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
@@ -276,7 +279,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("CSPAT00601"),
+            res = self.session.post(url, headers=self._headers("CSPAT00601"),
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
@@ -321,7 +324,7 @@ class LSApi:
         url = f"{self.base_url}/indtp/market-data"
         body = {"t1511InBlock": {"upcode": upcode}}
         try:
-            res = requests.post(url, headers=self._headers("t1511"),
+            res = self.session.post(url, headers=self._headers("t1511"),
                                 json=body, timeout=10)
             if res.status_code != 200:
                 print(f"[LS API] ❌ 지수 조회 실패({upcode}): HTTP {res.status_code} - {res.text[:200]}")
@@ -353,7 +356,7 @@ class LSApi:
         for endpoint in endpoints:
             try:
                 body = {"t1533InBlock": {"gubun": "0"}}
-                res = requests.post(f"{self.base_url}{endpoint}",
+                res = self.session.post(f"{self.base_url}{endpoint}",
                                     headers=self._headers("t1533"),
                                     json=body, timeout=10)
                 print(f"[t1533] {endpoint} → HTTP {res.status_code}")
@@ -393,7 +396,7 @@ class LSApi:
         print("[LS API] ❌ t1533 실패 - t8425 폴백")
         # t8425 폴백 (등락률 없이 이름만)
         try:
-            res = requests.post(f"{self.base_url}/stock/sector",
+            res = self.session.post(f"{self.base_url}/stock/sector",
                                 headers=self._headers("t8425"),
                                 json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
             rows = res.json().get("t8425OutBlock", [])
@@ -420,7 +423,7 @@ class LSApi:
         ]
         for endpoint, tr_cd, body in attempts:
             try:
-                res = requests.post(f"{self.base_url}{endpoint}",
+                res = self.session.post(f"{self.base_url}{endpoint}",
                                     headers=self._headers(tr_cd),
                                     json=body, timeout=10)
                 if res.status_code != 200:
@@ -481,7 +484,7 @@ class LSApi:
         # 일봉 파라미터 수정
         body["t1305InBlock"]["dwmcode"] = "1"
         try:
-            res = requests.post(url, headers=self._headers("t1305"),
+            res = self.session.post(url, headers=self._headers("t1305"),
                                 json=body, timeout=15)
             if res.status_code != 200:
                 return []
@@ -536,7 +539,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("t8410"),
+            res = self.session.post(url, headers=self._headers("t8410"),
                                 json=body, timeout=15)
             if res.status_code != 200:
                 return []
@@ -582,7 +585,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("t1716"),
+            res = self.session.post(url, headers=self._headers("t1716"),
                                 json=body, timeout=10)
             if res.status_code != 200:
                 return []
@@ -626,7 +629,7 @@ class LSApi:
             }
         }
         try:
-            res = requests.post(url, headers=self._headers("t8430"),
+            res = self.session.post(url, headers=self._headers("t8430"),
                                 json=body, timeout=20)
             if res.status_code != 200:
                 print(f"[LS API] ❌ 전종목 조회 실패: HTTP {res.status_code}")
@@ -669,7 +672,7 @@ class LSApi:
                 time.sleep(0.2)   # TPS 제한 대응
             body = {"t1511InBlock": {"upcode": upcode}}
             try:
-                res = requests.post(url, headers=self._headers("t1511"),
+                res = self.session.post(url, headers=self._headers("t1511"),
                                     json=body, timeout=10)
                 if res.status_code != 200:
                     print(f"[t1511] {upcode} HTTP {res.status_code}: {res.text[:100]}")
