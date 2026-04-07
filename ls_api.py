@@ -41,11 +41,12 @@ class LSApi:
             "appsecretkey" : self.app_secret,
             "scope"        : "oob"
         }
-        # 모의투자는 SSL 인증서 검증 생략 (자체 서명 인증서)
         verify = self.mode != "mock"
+        print(f"[LS API] 토큰 요청: {url} (mode={self.mode}, key={self.app_key[:8]}...)")
         try:
             res = requests.post(url, headers=headers, data=data,
                                 timeout=30, verify=verify)
+            print(f"[LS API] HTTP {res.status_code}: {res.text[:200]}")
             res.raise_for_status()
             result = res.json()
             self.access_token = result.get("access_token")
