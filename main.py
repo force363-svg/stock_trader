@@ -1278,21 +1278,25 @@ class MainWindow(QMainWindow):
         """보유종목 테이블의 AI판단 컬럼만 갱신 (신호 변경 시 호출)"""
         if not hasattr(self, 'holdings_table'):
             return
-        sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
-        hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
-        # 오늘 스캔 여부 확인 (ai_signals_timestamp가 오늘이면 스캔 완료)
+        # 종목코드 → 신호 매핑
+        sig_map = {s.get("stock_code"): s for s in self.ai_signals
+                   if s.get("signal_type") in ("SELL", "HOLD")}
         scanned_today = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
 
         for row in range(self.holdings_table.rowCount()):
             if row >= len(self.holdings_data):
                 break
             code = self.holdings_data[row].get("raw_code", "")
-            if code in sell_codes:
-                ai_text, ai_color = "매도", "#ff6b6b"
-            elif code in hold_codes:
-                ai_text, ai_color = "보유", "#fdcb6e"
+            sig  = sig_map.get(code)
+            if sig:
+                score = sig.get("score", 0)
+                if sig["signal_type"] == "SELL":
+                    ai_text  = f"매도 {score:.0f}점"
+                    ai_color = "#ff6b6b"
+                else:
+                    ai_text  = f"보유 {score:.0f}점"
+                    ai_color = "#fdcb6e"
             elif scanned_today:
-                # 오늘 스캔 완료됐는데 신호 없음 = 매도 사유 없음 → 보유
                 ai_text, ai_color = "보유", "#fdcb6e"
             else:
                 ai_text, ai_color = "대기중", "#636e72"
@@ -1701,7 +1705,7 @@ class MainWindow(QMainWindow):
         ])
         self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.holdings_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.holdings_table.setColumnWidth(8, 60)
+        self.holdings_table.setColumnWidth(8, 90)
         self.holdings_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.holdings_table.setAlternatingRowColors(True)
@@ -1964,13 +1968,19 @@ class MainWindow(QMainWindow):
                         item.setForeground(QColor("#74b9ff"))
                 self.holdings_table.setItem(row, col, item)
 
-            # AI 판단 (SELL/HOLD)
-            code = h.get("raw_code", "")
-            sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
-            hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
-            if code in sell_codes:
-                ai_text, ai_color = "매도", "#ff6b6b"
-            elif code in hold_codes:
+            # AI 판단 (SELL/HOLD + 점수)
+            code    = h.get("raw_code", "")
+            sig_map = {s.get("stock_code"): s for s in self.ai_signals
+                       if s.get("signal_type") in ("SELL", "HOLD")}
+            scanned = getattr(self, '_ai_signal_date', "") == datetime.now().strftime("%Y-%m-%d")
+            sig     = sig_map.get(code)
+            if sig:
+                score = sig.get("score", 0)
+                if sig["signal_type"] == "SELL":
+                    ai_text, ai_color = f"매도 {score:.0f}점", "#ff6b6b"
+                else:
+                    ai_text, ai_color = f"보유 {score:.0f}점", "#fdcb6e"
+            elif scanned:
                 ai_text, ai_color = "보유", "#fdcb6e"
             else:
                 ai_text, ai_color = "대기중", "#636e72"
