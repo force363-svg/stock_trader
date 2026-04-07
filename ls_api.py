@@ -27,6 +27,12 @@ class LSApi:
     #  토큰 발급
     # ─────────────────────────────────────
     def get_token(self):
+        # API 키 빈값 체크
+        if not self.app_key or not self.app_secret:
+            self.last_error = "API 키가 설정되지 않았습니다. 설정 창에서 키를 입력해주세요."
+            print(f"[LS API] ❌ {self.last_error}")
+            return False
+
         url = f"{self.base_url}/oauth2/token"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
@@ -35,8 +41,11 @@ class LSApi:
             "appsecretkey" : self.app_secret,
             "scope"        : "oob"
         }
+        # 모의투자는 SSL 인증서 검증 생략 (자체 서명 인증서)
+        verify = self.mode != "mock"
         try:
-            res = requests.post(url, headers=headers, data=data, timeout=10)
+            res = requests.post(url, headers=headers, data=data,
+                                timeout=30, verify=verify)
             res.raise_for_status()
             result = res.json()
             self.access_token = result.get("access_token")
