@@ -703,24 +703,36 @@ class MainWindow(QMainWindow):
 
     def _update_market_index(self):
         """KOSPI/KOSDAQ 지수 업데이트"""
-        for name, shcode in [("KOSPI", "001"), ("KOSDAQ", "101")]:
+        # upcode: KOSPI=001, KOSDAQ=301 (t1511 기준)
+        for name, upcode in [("KOSPI", "001"), ("KOSDAQ", "301")]:
             if name not in self.market_labels:
                 continue
-            data = self.api.get_market_index(shcode)
+            data = self.api.get_market_index(upcode)
             if not data:
                 continue
             try:
-                price = float(data.get("pricejisu", data.get("price", 0)))
-                jnilclose = float(data.get("jnilclose", data.get("jniljisu", 0)))
-                if jnilclose > 0:
-                    change = ((price - jnilclose) / jnilclose) * 100
+                row = data[0] if isinstance(data, list) else data
+                price = float(str(row.get("pricejisu", 0)).replace(",", ""))
+                # sign: 1=상승, 2=하락, 3=보합 / change: 대비값
+                try:
+                    chg_val = float(str(row.get("change", 0)).replace(",", ""))
+                except:
+                    chg_val = 0.0
+                sign_cd = str(row.get("sign", "3"))
+                prev = price - chg_val
+                if prev > 0:
+                    rt = chg_val / prev * 100
+                    if sign_cd == "2":
+                        rt = -abs(rt)
+                    elif sign_cd == "1":
+                        rt = abs(rt)
                 else:
-                    change = float(data.get("debi", 0))
+                    rt = 0.0
                 val_lbl, chg_lbl = self.market_labels[name]
                 val_lbl.setText(f"{price:,.2f}")
-                sign = "+" if change >= 0 else ""
-                color = "#ff6b6b" if change >= 0 else "#74b9ff"
-                chg_lbl.setText(f"{sign}{change:.2f}%")
+                sign_str = "+" if rt >= 0 else ""
+                color = "#ff6b6b" if rt >= 0 else "#74b9ff"
+                chg_lbl.setText(f"{sign_str}{rt:.2f}%")
                 chg_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
             except Exception as e:
                 print(f"[시장지수] {name} 파싱 실패: {e}")

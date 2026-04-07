@@ -317,31 +317,48 @@ class LSApi:
             return None
 
     # ─────────────────────────────────────
-    #  주가지수 조회 (t1511) - KOSPI/KOSDAQ
+    #  업종/지수 현재가 조회 (t1511)
     # ─────────────────────────────────────
-    def get_market_index(self, shcode="001"):
-        """shcode: 001=KOSPI, 101=KOSDAQ
-        지수 데이터는 /index/market-data 엔드포인트 사용 (/stock/market-data 아님)
+    # 올바른 엔드포인트: /indextic/market-data
+    # 올바른 필드명: upcode (shcode 아님)
+    # KOSPI종합=001, KOSDAQ종합=301
+    _SECTOR_CODES = [
+        ("001", "KOSPI종합"),
+        ("301", "KOSDAQ종합"),
+        ("010", "전기전자"),
+        ("005", "화학"),
+        ("006", "의약품"),
+        ("008", "철강금속"),
+        ("012", "운수장비"),
+        ("015", "건설업"),
+        ("018", "금융업"),
+        ("022", "서비스업"),
+    ]
+
+    def get_market_index(self, upcode="001"):
+        """업종/지수 현재가 (t1511)
+        upcode: 001=KOSPI종합, 301=KOSDAQ종합
+        엔드포인트: /indextic/market-data
         """
         if not self.ensure_token():
             return None
-        url = f"{self.base_url}/index/market-data"
-        body = {"t1511InBlock": {"shcode": shcode}}
+        url = f"{self.base_url}/indextic/market-data"
+        body = {"t1511InBlock": {"upcode": upcode}}
         try:
             res = requests.post(url, headers=self._headers("t1511"),
                                 json=body, timeout=10)
             if res.status_code != 200:
-                print(f"[LS API] ❌ 지수 조회 실패({shcode}): HTTP {res.status_code} - {res.text[:200]}")
+                print(f"[LS API] ❌ 지수 조회 실패({upcode}): HTTP {res.status_code} - {res.text[:200]}")
                 return None
             data = res.json()
             out = data.get("t1511OutBlock", {})
             if out:
-                print(f"[LS API] ✅ 지수 조회 완료({shcode}): {out}")
+                print(f"[LS API] ✅ 지수 조회 완료({upcode}): {out}")
             else:
-                print(f"[LS API] ⚠ 지수 응답 키 없음({shcode}): {list(data.keys())}")
+                print(f"[LS API] ⚠ 지수 응답 키 없음({upcode}): {list(data.keys())}")
             return out if out else None
         except Exception as e:
-            print(f"[LS API] ❌ 지수 조회 실패({shcode}): {e}")
+            print(f"[LS API] ❌ 지수 조회 실패({upcode}): {e}")
             return None
 
     # ─────────────────────────────────────
@@ -369,85 +386,80 @@ class LSApi:
             return []
 
     # ─────────────────────────────────────
-    #  업종지수 조회 (t8424)
+    #  업종지수 조회 (t1511 반복 호출)
     # ─────────────────────────────────────
     def get_sector_indices(self):
-        """전업종지수 조회 (t8425 - HTS 1512 화면)"""
+        """주요 업종지수 조회 (t1511, /indextic/market-data)
+        upcode 목록을 순회하며 각 업종의 현재가/등락률 수집
+        """
         if not self.ensure_token():
             return []
-        url = f"{self.base_url}/stock/sector"
-        body = {"t8425InBlock": {"gubun": "0"}}  # 0=코스피 업종 전체
-        try:
-            res = requests.post(url, headers=self._headers("t8425"),
-                                json=body, timeout=10)
-            if res.status_code != 200:
-                print(f"[t8425] HTTP {res.status_code}: {res.text[:200]}")
-                return []
-            raw = res.json()
-            print(f"[t8425 응답키] {list(raw.keys())}")
+        url = f"{self.base_url}/indextic/market-data"
+        results = []
+        for i, (upcode, display_name) in enumerate(self._SECTOR_CODES):
+            if i > 0:
+                time.sleep(0.2)   # TPS 제한 대응
+            body = {"t1511InBlock": {"upcode": upcode}}
+            try:
+                res = requests.post(url, headers=self._headers("t1511"),
+                                    json=body, timeout=10)
+                if res.status_code != 200:
+                    print(f"[t1511] {upcode} HTTP {res.status_code}: {res.text[:100]}")
+                    results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+                    continue
+                data = res.json()
+                out = data.get("t1511OutBlock", {})
+                if not out:
+                    print(f"[t1511] {upcode} OutBlock 없음: {list(data.keys())}")
+                    results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+                    continue
 
-            # 리스트 형태 OutBlock 탐색 (t8425OutBlock1 또는 t8425OutBlock)
-            rows = None
-            for key in raw:
-                val = raw[key]
-                if isinstance(val, list) and len(val) > 0:
-                    rows = val
-                    print(f"[t8425] 사용 키: {key} ({len(rows)}행), 첫행 키: {list(rows[0].keys()) if rows else '없음'}")
-                    break
-            if rows is None:
-                # dict 형태도 시도
-                for key in raw:
-                    if "OutBlock" in key or "outBlock" in key:
-                        rows = [raw[key]] if isinstance(raw[key], dict) else raw[key]
-                        print(f"[t8425] dict 키: {key}, 데이터: {str(rows)[:200]}")
-                        break
-            if rows is None:
-                print(f"[t8425] 전체 응답: {str(raw)[:500]}")
-                return []
+                row = out[0] if isinstance(out, list) else out
 
-            results = []
-            for row in rows[:10]:
-                # LS t8425 실제 필드명
-                name     = str(row.get("upnm", row.get("hname", "-"))).strip()
-                # 현재지수: jisu (소수점 2자리 문자열로 올 수 있음)
-                jisu_raw = row.get("jisu", row.get("pricejisu", row.get("nowindex", "0")))
-                jniljisu_raw = row.get("jniljisu", row.get("preindex", "0"))
-                deung_nak_rt = row.get("deung_nak_rt", "")   # 등락률 (부호포함 문자열)
-                deung_nak    = row.get("deung_nak", "")       # 등락 (부호포함 문자열)
+                # 업종명 (없으면 display_name 사용)
+                name = str(row.get("hname", row.get("upnm", display_name))).strip() or display_name
 
+                # 현재지수 (pricejisu)
                 try:
-                    jisu    = float(str(jisu_raw).replace(",", ""))
-                    jniljisu = float(str(jniljisu_raw).replace(",", ""))
+                    jisu = float(str(row.get("pricejisu", 0)).replace(",", ""))
                 except:
-                    jisu, jniljisu = 0.0, 0.0
+                    jisu = 0.0
 
-                # 등락률: API가 직접 주면 사용, 없으면 계산
-                if deung_nak_rt:
-                    try:
-                        rt = float(str(deung_nak_rt).replace(",", ""))
-                        sign = "+" if rt >= 0 else ""
-                        change_str = f"{sign}{rt:.2f}%"
-                    except:
-                        change_str = "+0.00%"
-                elif jniljisu > 0:
-                    rt = (jisu - jniljisu) / jniljisu * 100
-                    sign = "+" if rt >= 0 else ""
-                    change_str = f"{sign}{rt:.2f}%"
+                # 대비(change) + 구분(sign): 1=상승 2=하락 3=보합
+                try:
+                    chg_val = float(str(row.get("change", 0)).replace(",", ""))
+                except:
+                    chg_val = 0.0
+                sign_cd = str(row.get("sign", "3"))  # 1=상승,2=하락,3=보합
+
+                # 등락률 계산: change / (pricejisu - change) * 100
+                prev = jisu - chg_val
+                if prev > 0:
+                    rt = chg_val / prev * 100
+                    if sign_cd == "2":   # 하락이면 음수
+                        rt = -abs(rt)
+                    elif sign_cd == "1":
+                        rt = abs(rt)
+                    sign_str = "+" if rt >= 0 else ""
+                    change_str = f"{sign_str}{rt:.2f}%"
                 else:
-                    change_str = "+0.00%"
+                    change_str = "-"
 
+                idx_str = f"{jisu:,.2f}" if jisu > 0 else "-"
                 results.append({
-                    "name":    name if name else "-",
-                    "index":   f"{jisu:,.2f}",
+                    "name":    name,
+                    "index":   idx_str,
                     "change":  change_str,
                     "foreign": "-",
                     "inst":    "-",
                 })
-            print(f"[t8425] 파싱 완료: {len(results)}개 업종")
-            return results
-        except Exception as e:
-            print(f"[LS API] ❌ 전업종지수(t8425) 조회 실패: {e}")
-            return []
+                print(f"[t1511] ✅ {upcode} {name}: {idx_str} ({change_str})")
+            except Exception as e:
+                print(f"[t1511] {upcode} 오류: {e}")
+                results.append({"name": display_name, "index": "-", "change": "-", "foreign": "-", "inst": "-"})
+
+        print(f"[t1511] 업종지수 조회 완료: {len(results)}개")
+        return results
 
 
 # ─────────────────────────────────────
