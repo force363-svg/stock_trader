@@ -1157,6 +1157,19 @@ class MainWindow(QMainWindow):
         # 버튼 상태 업데이트
         self.btn_mock.setChecked(mode == "mock")
         self.btn_real.setChecked(mode == "real")
+        # 자동매매 중이면 정지
+        if self.is_trading:
+            self.is_trading = False
+            if hasattr(self, 'trade_timer'):
+                self.trade_timer.stop()
+            self.btn_start.setText("🚀 자동매매 시작")
+            self.btn_start.setStyleSheet(
+                "background-color: #00b894; color: #fff; border: none; font-weight: bold;"
+            )
+            self.log_area.append(f"[{now}] ⏸ 모드 전환으로 자동매매 정지")
+        # 보유종목 초기화 (이전 모드 데이터 제거)
+        self.holdings_data = []
+        self._update_holdings_table([])
         # config에 모드 저장
         config = load_config()
         config["api"]["trade_mode"] = mode
@@ -1400,6 +1413,8 @@ class MainWindow(QMainWindow):
     # ── 자동매매 사이클 ──
     def auto_trade_cycle(self):
         """10초마다 실행 - 조건식 체크 → 매수/매도 판단"""
+        if not self.api_connected:
+            return
         now = datetime.now().strftime("%H:%M:%S")
         config = load_config()
 
