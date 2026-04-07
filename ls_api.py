@@ -319,7 +319,7 @@ class LSApi:
     # ─────────────────────────────────────
     #  업종/지수 현재가 조회 (t1511)
     # ─────────────────────────────────────
-    # 올바른 엔드포인트: /indextic/market-data
+    # 올바른 엔드포인트: /indtp/market-data
     # 올바른 필드명: upcode (shcode 아님)
     # KOSPI종합=001, KOSDAQ종합=301
     _SECTOR_CODES = [
@@ -338,11 +338,11 @@ class LSApi:
     def get_market_index(self, upcode="001"):
         """업종/지수 현재가 (t1511)
         upcode: 001=KOSPI종합, 301=KOSDAQ종합
-        엔드포인트: /indextic/market-data
+        엔드포인트: /indtp/market-data
         """
         if not self.ensure_token():
             return None
-        url = f"{self.base_url}/indextic/market-data"
+        url = f"{self.base_url}/indtp/market-data"
         body = {"t1511InBlock": {"upcode": upcode}}
         try:
             res = requests.post(url, headers=self._headers("t1511"),
@@ -389,12 +389,12 @@ class LSApi:
     #  업종지수 조회 (t1511 반복 호출)
     # ─────────────────────────────────────
     def get_sector_indices(self):
-        """주요 업종지수 조회 (t1511, /indextic/market-data)
+        """주요 업종지수 조회 (t1511, /indtp/market-data)
         upcode 목록을 순회하며 각 업종의 현재가/등락률 수집
         """
         if not self.ensure_token():
             return []
-        url = f"{self.base_url}/indextic/market-data"
+        url = f"{self.base_url}/indtp/market-data"
         results = []
         for i, (upcode, display_name) in enumerate(self._SECTOR_CODES):
             if i > 0:
