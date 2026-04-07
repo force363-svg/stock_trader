@@ -356,35 +356,70 @@ class LSApi:
         try:
             res = requests.post(url, headers=self._headers("t8425"),
                                 json=body, timeout=10)
-            res.raise_for_status()
+            if res.status_code != 200:
+                print(f"[t8425] HTTP {res.status_code}: {res.text[:200]}")
+                return []
             raw = res.json()
             print(f"[t8425 응답키] {list(raw.keys())}")
-            # 응답 키 자동 탐색
+
+            # 리스트 형태 OutBlock 탐색 (t8425OutBlock1 또는 t8425OutBlock)
             rows = None
             for key in raw:
-                if "OutBlock" in key or "outBlock" in key:
-                    rows = raw[key]
-                    print(f"[t8425] 사용 키: {key}, 데이터: {str(rows)[:200]}")
+                val = raw[key]
+                if isinstance(val, list) and len(val) > 0:
+                    rows = val
+                    print(f"[t8425] 사용 키: {key} ({len(rows)}행), 첫행 키: {list(rows[0].keys()) if rows else '없음'}")
                     break
             if rows is None:
-                print(f"[t8425] 전체 응답: {str(raw)[:300]}")
+                # dict 형태도 시도
+                for key in raw:
+                    if "OutBlock" in key or "outBlock" in key:
+                        rows = [raw[key]] if isinstance(raw[key], dict) else raw[key]
+                        print(f"[t8425] dict 키: {key}, 데이터: {str(rows)[:200]}")
+                        break
+            if rows is None:
+                print(f"[t8425] 전체 응답: {str(raw)[:500]}")
                 return []
-            if isinstance(rows, dict):
-                rows = [rows]
+
             results = []
             for row in rows[:10]:
-                name      = row.get("hname", row.get("upnm", "-")).strip()
-                pricejisu = float(row.get("pricejisu", row.get("nowindex", 0)))
-                jniljisu  = float(row.get("jniljisu", row.get("preindex", 0)))
-                change    = ((pricejisu - jniljisu) / jniljisu * 100) if jniljisu > 0 else 0.0
-                sign      = "+" if change >= 0 else ""
+                # LS t8425 실제 필드명
+                name     = str(row.get("upnm", row.get("hname", "-"))).strip()
+                # 현재지수: jisu (소수점 2자리 문자열로 올 수 있음)
+                jisu_raw = row.get("jisu", row.get("pricejisu", row.get("nowindex", "0")))
+                jniljisu_raw = row.get("jniljisu", row.get("preindex", "0"))
+                deung_nak_rt = row.get("deung_nak_rt", "")   # 등락률 (부호포함 문자열)
+                deung_nak    = row.get("deung_nak", "")       # 등락 (부호포함 문자열)
+
+                try:
+                    jisu    = float(str(jisu_raw).replace(",", ""))
+                    jniljisu = float(str(jniljisu_raw).replace(",", ""))
+                except:
+                    jisu, jniljisu = 0.0, 0.0
+
+                # 등락률: API가 직접 주면 사용, 없으면 계산
+                if deung_nak_rt:
+                    try:
+                        rt = float(str(deung_nak_rt).replace(",", ""))
+                        sign = "+" if rt >= 0 else ""
+                        change_str = f"{sign}{rt:.2f}%"
+                    except:
+                        change_str = "+0.00%"
+                elif jniljisu > 0:
+                    rt = (jisu - jniljisu) / jniljisu * 100
+                    sign = "+" if rt >= 0 else ""
+                    change_str = f"{sign}{rt:.2f}%"
+                else:
+                    change_str = "+0.00%"
+
                 results.append({
                     "name":    name if name else "-",
-                    "index":   f"{pricejisu:,.2f}",
-                    "change":  f"{sign}{change:.2f}%",
+                    "index":   f"{jisu:,.2f}",
+                    "change":  change_str,
                     "foreign": "-",
                     "inst":    "-",
                 })
+            print(f"[t8425] 파싱 완료: {len(results)}개 업종")
             return results
         except Exception as e:
             print(f"[LS API] ❌ 전업종지수(t8425) 조회 실패: {e}")
