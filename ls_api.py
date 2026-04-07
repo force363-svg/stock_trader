@@ -320,16 +320,26 @@ class LSApi:
     #  주가지수 조회 (t1511) - KOSPI/KOSDAQ
     # ─────────────────────────────────────
     def get_market_index(self, shcode="001"):
-        """shcode: 001=KOSPI, 101=KOSDAQ"""
+        """shcode: 001=KOSPI, 101=KOSDAQ
+        지수 데이터는 /index/market-data 엔드포인트 사용 (/stock/market-data 아님)
+        """
         if not self.ensure_token():
             return None
-        url = f"{self.base_url}/stock/market-data"
+        url = f"{self.base_url}/index/market-data"
         body = {"t1511InBlock": {"shcode": shcode}}
         try:
             res = requests.post(url, headers=self._headers("t1511"),
                                 json=body, timeout=10)
-            res.raise_for_status()
-            return res.json().get("t1511OutBlock", {})
+            if res.status_code != 200:
+                print(f"[LS API] ❌ 지수 조회 실패({shcode}): HTTP {res.status_code} - {res.text[:200]}")
+                return None
+            data = res.json()
+            out = data.get("t1511OutBlock", {})
+            if out:
+                print(f"[LS API] ✅ 지수 조회 완료({shcode}): {out}")
+            else:
+                print(f"[LS API] ⚠ 지수 응답 키 없음({shcode}): {list(data.keys())}")
+            return out if out else None
         except Exception as e:
             print(f"[LS API] ❌ 지수 조회 실패({shcode}): {e}")
             return None
