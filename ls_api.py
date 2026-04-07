@@ -13,6 +13,7 @@ class LSApi:
         self.app_secret = self.config["api"]["ls_app_secret"]
         self.access_token = None
         self.token_expire = None
+        self.last_error = ""
 
     # ─────────────────────────────────────
     #  토큰 발급
@@ -32,11 +33,14 @@ class LSApi:
             result = res.json()
             self.access_token = result.get("access_token")
             if not self.access_token:
-                print(f"[LS API] ❌ 토큰 응답 이상: {result}")
+                self.last_error = f"토큰 응답 이상: {result}"
+                print(f"[LS API] ❌ {self.last_error}")
                 return False
+            self.last_error = ""
             print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}...")
             return True
         except Exception as e:
+            self.last_error = str(e)
             print(f"[LS API] ❌ 토큰 발급 실패: {e}")
             return False
 

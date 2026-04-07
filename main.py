@@ -513,7 +513,7 @@ class MainWindow(QMainWindow):
                     "background-color: #d6303122; color: #d63031; "
                     "border: 1px solid #d63031; border-radius: 4px; padding: 2px 6px; font-size: 11px;"
                 )
-                self.log_area.append(f"[{now}] ❌ LS API 연결 실패 - 설정에서 키 확인")
+                self.log_area.append(f"[{now}] ❌ LS API 연결 실패 - {self.api.last_error}")
         except Exception as e:
             self.log_area.append(f"[{now}] ❌ API 오류: {e}")
 
