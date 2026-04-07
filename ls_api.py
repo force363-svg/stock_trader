@@ -345,6 +345,30 @@ class LSApi:
             return None
 
     # ─────────────────────────────────────
+    #  테마 목록 조회 (t8425)
+    # ─────────────────────────────────────
+    def get_themes(self):
+        """테마 목록 조회 (t8425) - tmname/tmcode 반환"""
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/sector"
+        body = {"t8425InBlock": {"gubun": "0"}}
+        try:
+            res = requests.post(url, headers=self._headers("t8425"),
+                                json=body, timeout=10)
+            if res.status_code != 200:
+                print(f"[t8425] HTTP {res.status_code}")
+                return []
+            rows = res.json().get("t8425OutBlock", [])
+            result = [{"name": r.get("tmname", "").strip(),
+                       "code": r.get("tmcode", "")} for r in rows if r.get("tmname")]
+            print(f"[LS API] ✅ 테마 조회 완료: {len(result)}개")
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 테마 조회 실패: {e}")
+            return []
+
+    # ─────────────────────────────────────
     #  업종지수 조회 (t8424)
     # ─────────────────────────────────────
     def get_sector_indices(self):
