@@ -31,6 +31,9 @@ class LSApi:
             res.raise_for_status()
             result = res.json()
             self.access_token = result.get("access_token")
+            if not self.access_token:
+                print(f"[LS API] ❌ 토큰 응답 이상: {result}")
+                return False
             print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}...")
             return True
         except Exception as e:
