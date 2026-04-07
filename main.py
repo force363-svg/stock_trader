@@ -636,9 +636,6 @@ class MainWindow(QMainWindow):
         self.holdings_data = []  # 보유종목 원본 데이터
 
         self._build_ui()
-        # 버튼 초기 상태를 config의 trade_mode에 맞게 설정
-        self.btn_mock.setChecked(self.trade_mode == "mock")
-        self.btn_real.setChecked(self.trade_mode == "real")
         self._init_api()
 
         # 30초마다 자동 업데이트 타이머
@@ -771,23 +768,26 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(self.ls_badge)
 
+        # 모드 표시 라벨 (실전=빨강, 모의=파랑)
+        if self.trade_mode == "mock":
+            mode_label = QLabel("🎮 모의투자")
+            mode_label.setStyleSheet(
+                "background-color: #0984e3; color: #ffffff; "
+                "border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: bold;"
+            )
+        else:
+            mode_label = QLabel("📊 실전투자")
+            mode_label.setStyleSheet(
+                "background-color: #d63031; color: #ffffff; "
+                "border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: bold;"
+            )
+        layout.addWidget(mode_label)
+
         # 버튼들
         self.btn_settings = QPushButton("⚙️ 설정")
         self.btn_settings.setObjectName("btn_settings")
         self.btn_settings.clicked.connect(self.open_settings)
         layout.addWidget(self.btn_settings)
-
-        self.btn_mock = QPushButton("모의")
-        self.btn_mock.setCheckable(True)
-        self.btn_mock.setStyleSheet("padding: 2px 8px; font-size: 11px;")
-        self.btn_mock.clicked.connect(lambda: self.switch_trade_mode("mock"))
-        layout.addWidget(self.btn_mock)
-
-        self.btn_real = QPushButton("실전")
-        self.btn_real.setCheckable(True)
-        self.btn_real.setStyleSheet("padding: 2px 8px; font-size: 11px;")
-        self.btn_real.clicked.connect(lambda: self.switch_trade_mode("real"))
-        layout.addWidget(self.btn_real)
 
         self.btn_stop = QPushButton("⏹ 정지")
         self.btn_stop.setObjectName("btn_stop")
@@ -1271,13 +1271,10 @@ class MainWindow(QMainWindow):
             self.summary_labels["매매상태"].setText(status)
             self.summary_labels["매매상태"].setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
-    # ── 모의/실전 전환 ──
+    # ── 모드 전환 (내부용, 버튼 없음) ──
     def switch_trade_mode(self, mode):
         now = datetime.now().strftime("%H:%M:%S")
         self.trade_mode = mode
-        # 버튼 상태 업데이트
-        self.btn_mock.setChecked(mode == "mock")
-        self.btn_real.setChecked(mode == "real")
         # 자동매매 중이면 정지
         if self.is_trading:
             self.is_trading = False
