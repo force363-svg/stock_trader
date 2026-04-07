@@ -1072,9 +1072,6 @@ class MainWindow(QMainWindow):
         self.ai_signals     = []
         self.ai_thread      = None
         self._fetch_thread  = None
-        # startup.log 경로 공유 (디버그용)
-        _log_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
-        self._startup_log = os.path.join(_log_dir, "startup.log")
 
         self._api_init_thread = None   # API 초기 연결 스레드
 
@@ -1147,52 +1144,31 @@ class MainWindow(QMainWindow):
     def _on_fetch_done(self, result: dict):
         """백그라운드 조회 완료 → UI 업데이트 (메인 스레드에서 안전하게 실행)"""
         now = datetime.now().strftime("%H:%M:%S")
-        _slog = getattr(self, '_startup_log', None)
-        def _sl(msg):
-            if _slog:
-                try:
-                    with open(_slog, "a", encoding="utf-8") as f:
-                        f.write(f"{datetime.now().strftime('%H:%M:%S')} [fetch] {msg}\n")
-                except Exception:
-                    pass
 
-        _sl("시작")
-        # 보유종목 + 계좌요약
         holdings = result.get("holdings", [])
         summary  = result.get("summary", {})
-        _sl(f"보유종목 {len(holdings)}개")
         if holdings is not None:
             self.holdings_data = holdings
-            _sl("holdings_table 업데이트 시작")
             self._update_holdings_table(holdings)
-            _sl("holdings_table 완료")
             self._write_holdings_cache(holdings)
         if summary:
             self._update_summary(summary)
-        _sl("summary 완료")
 
         if "error_holdings" in result:
             self.log_area.append(f"[{now}] ❌ 잔고 조회 실패: {result['error_holdings']}")
 
-        _sl("market_index 시작")
         self._apply_market_index("KOSPI",  result.get("kospi"))
         self._apply_market_index("KOSDAQ", result.get("kosdaq"))
-        _sl("market_index 완료")
 
         sectors = result.get("sectors", [])
-        _sl(f"sector_table 시작 ({len(sectors)})")
         if sectors:
             self._apply_sector_table(sectors)
-        _sl("sector_table 완료")
 
         themes = result.get("themes", [])
-        _sl(f"theme_section 시작 ({len(themes)})")
         if themes:
             self._update_theme_section(themes)
-        _sl("theme_section 완료")
 
         self.time_label.setText(f"⏱ {now} 업데이트")
-        _sl("완료")
 
 # ── AI 신호 파일 읽기 (10초마다) ──
     def _update_ai_signals(self):
@@ -2522,32 +2498,8 @@ class MainWindow(QMainWindow):
 #  실행 진입점
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    _log_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
-    _log_path = os.path.join(_log_dir, "startup.log")
-
-    def _log(msg):
-        try:
-            with open(_log_path, "a", encoding="utf-8") as _f:
-                _f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
-        except Exception:
-            pass
-
-    try:
-        _log("=== 시작 ===")
-        app = QApplication(sys.argv)
-        _log("QApplication 생성 완료")
-        app.setStyle("Fusion")
-        _log("MainWindow 생성 시작")
-        window = MainWindow()
-        _log("MainWindow 생성 완료")
-        window.show()
-        _log("window.show() 완료 - 이벤트 루프 시작")
-        code = app.exec_()
-        _log(f"이벤트 루프 종료 (code={code})")
-        sys.exit(code)
-    except BaseException as _e:
-        import traceback
-        _log(f"오류 발생: {type(_e).__name__}: _e")
-        with open(_log_path, "a", encoding="utf-8") as _f:
-            traceback.print_exc(file=_f)
-        raise
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
