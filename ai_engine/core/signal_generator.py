@@ -1,11 +1,17 @@
 """
 매수/매도/보유 신호 생성
-점수 기준: 80점↑매수 / 50~79보유 / 50↓관망
+점수 기준: engine_config.json thresholds 실시간 반영
+  - BUY  : 매수 임계값 이상
+  - HOLD : 보유 임계값 이상
+  - SELL : 보유 종목 점수 하락 또는 페널티 조건 충족
 """
 import json
 import os
 import sys
 from .scorer import calculate_score
+from ..conditions.score_penalty import ScorePenaltyCondition
+
+_penalty_calc = ScorePenaltyCondition()
 
 
 def _get_thresholds():
@@ -17,7 +23,7 @@ def _get_thresholds():
         with open(os.path.join(base, "engine_config.json"), "r", encoding="utf-8") as f:
             cfg = json.load(f)
         return cfg.get("thresholds", {"buy": 80, "hold": 50})
-    except:
+    except Exception:
         return {"buy": 80, "hold": 50}
 
 
@@ -47,7 +53,7 @@ def _target_price(current_price: int, daily: list) -> int:
 
 def generate_signal(code: str, name: str, data: dict) -> dict | None:
     """
-    단일 종목 신호 생성
+    신규 진입 후보 신호 생성 (BUY / HOLD)
     반환: 신호 dict 또는 None (관망)
     """
     thresh = _get_thresholds()
@@ -60,7 +66,7 @@ def generate_signal(code: str, name: str, data: dict) -> dict | None:
     price_data = data.get("price", {})
     try:
         current_price = int(float(price_data.get("price", price_data.get("close", 0))))
-    except:
+    except Exception:
         current_price = 0
 
     # 무조건 제외 조건 (설계서 §5)
@@ -83,18 +89,85 @@ def generate_signal(code: str, name: str, data: dict) -> dict | None:
     daily = data.get("daily", [])
 
     return {
-        "stock_code"  : code,
-        "stock_name"  : name,
-        "signal_type" : signal_type,
-        "score"       : score,
-        "current_price": current_price,
-        "conditions"  : {
+        "stock_code"    : code,
+        "stock_name"    : name,
+        "signal_type"   : signal_type,
+        "score"         : score,
+        "current_price" : current_price,
+        "conditions"    : {
             k: {"score": v["score"], "detail": v["detail"]}
             for k, v in result["conditions"].items()
         },
-        "stop_loss"   : _stop_loss(current_price),
-        "target_price": _target_price(current_price, daily),
-        "confidence"  : _confidence(score, buy_t),
+        "stop_loss"     : _stop_loss(current_price),
+        "target_price"  : _target_price(current_price, daily),
+        "confidence"    : _confidence(score, buy_t),
+        "supply_score"  : result["supply_score"],
+        "chart_score"   : result["chart_score"],
+        "material_score": result["material_score"],
+    }
+
+
+def generate_sell_signal(code: str, name: str, data: dict,
+                         hold_info: dict,
+                         market_status: dict | None = None) -> dict | None:
+    """
+    보유 종목에 대한 매도 신호 생성
+    hold_info: {"code", "name", "buy_price", "qty"}
+    market_status: {"down_ratio", "index_new_low", "index_sudden_drop", "index_drop_pct"}
+    반환: SELL 신호 dict 또는 None (매도 불필요)
+    """
+    thresh = _get_thresholds()
+    hold_t = thresh.get("hold", 50)
+
+    # 현재 점수 계산
+    result = calculate_score(code, data)
+    score  = result["total_score"]
+
+    price_data = data.get("price", {})
+    try:
+        current_price = int(float(price_data.get("price", price_data.get("close", 0))))
+    except Exception:
+        current_price = 0
+
+    sell_reasons = []
+
+    # ── 1. 점수 자체가 보유 임계값 미만 → 매도 ──
+    if score < hold_t:
+        sell_reasons.append(f"점수 하락({score:.1f} < 보유임계값 {hold_t})")
+
+    # ── 2. 페널티 조건 체크 (engine_config sell 섹션) ──
+    penalty_data = {
+        **data,
+        "hold_score"    : score,
+        "market_status" : market_status or {},
+    }
+    remaining, penalty_detail = _penalty_calc.score(code, penalty_data)
+    if remaining < hold_t and penalty_detail != "이상 없음":
+        sell_reasons.append(f"페널티: {penalty_detail}")
+
+    # ── 3. 역배열 전환 → 즉시 매도 ──
+    ma_cond = result["conditions"].get("이평선_배열상태", {})
+    if ma_cond.get("score", 100) < 15:
+        sell_reasons.append("이평선 역배열 전환")
+
+    if not sell_reasons:
+        return None
+
+    daily = data.get("daily", [])
+    return {
+        "stock_code"    : code,
+        "stock_name"    : name,
+        "signal_type"   : "SELL",
+        "score"         : score,
+        "current_price" : current_price,
+        "sell_reason"   : " / ".join(sell_reasons),
+        "conditions"    : {
+            k: {"score": v["score"], "detail": v["detail"]}
+            for k, v in result["conditions"].items()
+        },
+        "stop_loss"     : 0,
+        "target_price"  : 0,
+        "confidence"    : "HIGH",
         "supply_score"  : result["supply_score"],
         "chart_score"   : result["chart_score"],
         "material_score": result["material_score"],

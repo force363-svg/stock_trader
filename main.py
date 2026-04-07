@@ -773,23 +773,14 @@ class AIEngineThread(QThread):
             scanner    = Scanner(fetcher)
             last_scan  = 0
             last_learn = ""
+            import json as _json
+            import time
+            from datetime import datetime
+            _cfg_path = os.path.join(_root, "engine_config.json")
 
-            # scan_interval을 engine_config.json에서 읽기 (없으면 60초)
-            try:
-                import json as _json
-                _cfg_path = os.path.join(_root, "engine_config.json")
-                with open(_cfg_path, "r", encoding="utf-8") as _f:
-                    _cfg = _json.load(_f)
-                SCAN_INTERVAL = int(_cfg.get("scan_interval_seconds", 60))
-            except:
-                SCAN_INTERVAL = 60
-
-            self.status_signal.emit(f"[AI엔진] ✅ 준비 완료 - 장중 {SCAN_INTERVAL}초마다 스캔")
+            self.status_signal.emit("[AI엔진] ✅ 준비 완료")
 
             while self._running:
-                import time
-                from datetime import datetime
-
                 now_hm = datetime.now().strftime("%H:%M")
                 today  = datetime.now().strftime("%Y%m%d")
 
@@ -797,6 +788,16 @@ class AIEngineThread(QThread):
                 cmd = read_command()
                 if cmd.get("command") == "stop":
                     break
+
+                # engine_config.json에서 스캔간격 실시간 반영
+                try:
+                    with open(_cfg_path, "r", encoding="utf-8") as _f:
+                        _cfg = _json.load(_f)
+                    scan_interval = max(10, int(_cfg.get("scan_interval_seconds", 60)))
+                    max_scan      = int(_cfg.get("max_scan_stocks", 2000))
+                except Exception:
+                    scan_interval = 60
+                    max_scan      = 2000
 
                 # 장 마감 후 학습 (1일 1회)
                 if now_hm >= "15:40" and last_learn != today:
@@ -810,19 +811,23 @@ class AIEngineThread(QThread):
 
                 # 장중 스캔
                 if "09:00" <= now_hm <= "15:30":
-                    if time.time() - last_scan >= SCAN_INTERVAL:
-                        self.status_signal.emit("[AI엔진] 🔍 전 종목 스캔 중...")
+                    if time.time() - last_scan >= scan_interval:
+                        self.status_signal.emit(
+                            f"[AI엔진] 🔍 전 종목 스캔 중... (간격:{scan_interval}초 최대:{max_scan}종목)"
+                        )
                         try:
-                            signals, count = scanner.run_scan()
+                            signals, count = scanner.run_scan(max_stocks=max_scan)
                             write_signals(signals, scan_count=count)
+                            buy_cnt  = sum(1 for s in signals if s.get("signal_type") == "BUY")
+                            sell_cnt = sum(1 for s in signals if s.get("signal_type") == "SELL")
                             self.status_signal.emit(
-                                f"[AI엔진] ✅ {count}종목 스캔 → {len(signals)}개 신호"
+                                f"[AI엔진] ✅ {count}종목 스캔 → 매수:{buy_cnt} 매도:{sell_cnt}"
                             )
                         except Exception as e:
                             self.status_signal.emit(f"[AI엔진] 스캔 오류: {e}")
                         last_scan = time.time()
 
-                time.sleep(10)
+                time.sleep(5)   # 5초마다 체크 (명령/간격 변경 빠른 반영)
 
         except Exception as e:
             self.status_signal.emit(f"[AI엔진] ❌ 오류: {e}")
@@ -923,6 +928,7 @@ class MainWindow(QMainWindow):
         if holdings is not None:
             self.holdings_data = holdings
             self._update_holdings_table(holdings)
+            self._write_holdings_cache(holdings)   # AI 엔진에 보유종목 전달
         if summary:
             self._update_summary(summary)
 
@@ -1689,6 +1695,30 @@ class MainWindow(QMainWindow):
             name = h["name"]
             btn_sell.clicked.connect(lambda _, c=code, q=qty, n=name: self.sell_stock(n, c, q))
             self.holdings_table.setCellWidget(row, 8, btn_sell)
+
+    def _write_holdings_cache(self, holdings):
+        """AI 엔진이 보유종목 SELL 판단에 쓸 holdings_cache.json 저장"""
+        if getattr(sys, 'frozen', False):
+            base = os.path.dirname(os.path.dirname(sys.executable))
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(base, "holdings_cache.json")
+        tmp  = path + ".tmp"
+        try:
+            payload = [
+                {
+                    "code"     : h.get("raw_code", ""),
+                    "name"     : h.get("name", ""),
+                    "buy_price": h.get("raw_buy_price", 0),
+                    "qty"      : h.get("raw_qty", 0),
+                }
+                for h in holdings if h.get("raw_code")
+            ]
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
 
     # ── 계좌 요약 업데이트 ──
     def _update_summary(self, summary):
