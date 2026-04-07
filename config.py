@@ -46,10 +46,20 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
+    config = json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return DEFAULT_CONFIG.copy()
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            # 저장된 값을 DEFAULT에 덮어쓰기 (섹션별 병합)
+            for section, values in saved.items():
+                if section in config and isinstance(config[section], dict) and isinstance(values, dict):
+                    config[section].update(values)
+                else:
+                    config[section] = values
+        except Exception as e:
+            print(f"[설정] 로드 실패, 기본값 사용: {e}")
+    return config
 
 def save_config(config: dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:

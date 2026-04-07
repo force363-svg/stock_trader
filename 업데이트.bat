@@ -18,12 +18,17 @@ echo.
 REM ── API 키 백업 ──
 echo [2/4] API 키 백업 중...
 if exist C:\StockTrader\StockTrader_Real\user_settings.json (
-    copy /Y C:\StockTrader\StockTrader_Real\user_settings.json backup_real.json >nul
+    copy /Y C:\StockTrader\StockTrader_Real\user_settings.json C:\stock_trader\backup_real.json >nul
+    echo    실전 API 키 백업 완료
+) else (
+    echo    실전 user_settings.json 없음 - 건너뜀
 )
 if exist C:\StockTrader\StockTrader_Mock\user_settings.json (
-    copy /Y C:\StockTrader\StockTrader_Mock\user_settings.json backup_mock.json >nul
+    copy /Y C:\StockTrader\StockTrader_Mock\user_settings.json C:\stock_trader\backup_mock.json >nul
+    echo    모의 API 키 백업 완료
+) else (
+    echo    모의 user_settings.json 없음 - 건너뜀
 )
-echo 완료
 
 REM ── 실전투자 빌드 ──
 echo.
@@ -50,13 +55,17 @@ if errorlevel 1 (
 echo 완료
 
 REM ── API 키 복원 ──
-if exist backup_real.json (
-    copy /Y backup_real.json C:\StockTrader\StockTrader_Real\user_settings.json >nul
-    del backup_real.json >nul
+echo.
+echo API 키 복원 중...
+if exist C:\stock_trader\backup_real.json (
+    copy /Y C:\stock_trader\backup_real.json C:\StockTrader\StockTrader_Real\user_settings.json >nul
+    del C:\stock_trader\backup_real.json >nul
+    echo    실전 API 키 복원 완료
 )
-if exist backup_mock.json (
-    copy /Y backup_mock.json C:\StockTrader\StockTrader_Mock\user_settings.json >nul
-    del backup_mock.json >nul
+if exist C:\stock_trader\backup_mock.json (
+    copy /Y C:\stock_trader\backup_mock.json C:\StockTrader\StockTrader_Mock\user_settings.json >nul
+    del C:\stock_trader\backup_mock.json >nul
+    echo    모의 API 키 복원 완료
 )
 
 echo.
