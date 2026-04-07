@@ -1333,11 +1333,11 @@ class MainWindow(QMainWindow):
             layout.addWidget(self.btn_mock)
             layout.addWidget(self.btn_real)
 
-        self.btn_ai_engine = QPushButton("⚫ AI엔진 OFF")
+        self.btn_ai_engine = QPushButton("🤖 AI엔진  꺼짐")
         self.btn_ai_engine.setStyleSheet(
-            "background-color: #636e72; color: #b2bec3; "
-            "border: 2px solid #4a545a; "
-            "font-weight: bold; padding: 6px 12px; border-radius: 4px; font-size: 13px;"
+            "background-color: #2d3436; color: #636e72; "
+            "border: 1px solid #636e72; font-weight: bold; "
+            "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
         )
         self.btn_ai_engine.clicked.connect(self.toggle_ai_engine)
         layout.addWidget(self.btn_ai_engine)
@@ -2142,22 +2142,18 @@ class MainWindow(QMainWindow):
     def _set_ai_btn_state(self, running: bool):
         """AI 엔진 버튼 상태 즉시 반영"""
         if running:
-            # 동작 중: 밝은 초록 + 테두리 발광 효과
-            self.btn_ai_engine.setText("🟢 AI엔진 ON")
+            self.btn_ai_engine.setText("🤖 동작중 ●●●")
             self.btn_ai_engine.setStyleSheet(
                 "background-color: #00b894; color: #fff; "
-                "border: 2px solid #55efc4; "
-                "font-weight: bold; padding: 6px 12px; border-radius: 4px; "
-                "font-size: 13px;"
+                "border: none; font-weight: bold; "
+                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
             )
         else:
-            # 꺼짐: 어두운 회색
-            self.btn_ai_engine.setText("⚫ AI엔진 OFF")
+            self.btn_ai_engine.setText("🤖 AI엔진  꺼짐")
             self.btn_ai_engine.setStyleSheet(
-                "background-color: #636e72; color: #b2bec3; "
-                "border: 2px solid #4a545a; "
-                "font-weight: bold; padding: 6px 12px; border-radius: 4px; "
-                "font-size: 13px;"
+                "background-color: #2d3436; color: #636e72; "
+                "border: 1px solid #636e72; font-weight: bold; "
+                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
             )
         self.btn_ai_engine.setEnabled(True)
 
@@ -2167,12 +2163,11 @@ class MainWindow(QMainWindow):
         if self.ai_thread and self.ai_thread.isRunning():
             # ── 정지 요청: 버튼 즉시 변경 후 비동기 종료 ──
             self.btn_ai_engine.setEnabled(False)   # 중복 클릭 방지
-            self.btn_ai_engine.setText("⏳ 정지 중...")
+            self.btn_ai_engine.setText("🤖 정지 중...")
             self.btn_ai_engine.setStyleSheet(
-                "background-color: #fdcb6e; color: #2d3436; "
-                "border: 2px solid #e17055; "
-                "font-weight: bold; padding: 6px 12px; border-radius: 4px; "
-                "font-size: 13px;"
+                "background-color: #636e72; color: #dfe6e9; "
+                "border: none; font-weight: bold; "
+                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
             )
             self.ai_thread.stop()
             # 스레드 종료 시그널로 버튼 복원 (블로킹 없음)
