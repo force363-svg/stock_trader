@@ -1,5 +1,5 @@
 """
-t1532 type 파라미터 추가 테스트
+t1537 올바른 파라미터로 테스트 (전체 테마 등락률)
 실행: python debug_api.py
 """
 import requests, time
@@ -26,39 +26,37 @@ def hdr(tr_cd):
         "tr_cont_key"  : "",
     }
 
-tmcodes = ["0012", "0030", "0014"]  # 반도체장비, 조선, 반도체재료
+endpoints = ["/stock/sector", "/stock/market-data", "/stock/investinfo"]
 
-# t1532 다양한 바디 조합
+# t1537 - 올바른 파라미터 조합 (전체 테마, gubun=0)
 bodies = [
-    {"t1532InBlock": {"tmcode": "0012"}},
-    {"t1532InBlock": {"tmcode": "0012", "type": "0"}},
-    {"t1532InBlock": {"tmcode": "0012", "type": "1"}},
-    {"t1532InBlock": {"tmcode": "0012", "gubun": "0"}},
-    {"t1532InBlock": {"tmcode": "12"}},        # 앞 0 제거
-    {"t1532InBlock": {"tmcode": "0012", "dummy": ""}},
+    {"t1537InBlock": {"gubun": "0"}},
+    {"t1537InBlock": {"gubun": "1"}},
+    {"t1537InBlock": {"dummy": ""}},
+    {"t1537InBlock": {}},
 ]
 
-print("=== t1532 /stock/sector - 바디 조합 테스트 ===")
-for body in bodies:
-    for ep in ["/stock/sector", "/stock/market-data"]:
-        res = requests.post(f"{base}{ep}", headers=hdr("t1532"), json=body, timeout=10)
+print("=== t1537 전체 테마 등락률 조회 ===")
+for ep in endpoints:
+    for body in bodies:
+        res = requests.post(f"{base}{ep}", headers=hdr("t1537"), json=body, timeout=10)
         raw = res.json()
         rsp_cd  = raw.get("rsp_cd","?")
         rsp_msg = raw.get("rsp_msg","")
-        all_keys = [k for k in raw.keys() if "OutBlock" in k]
-        has_data = any(raw.get(k) for k in all_keys)
+        out_keys = [k for k in raw.keys() if "OutBlock" in k]
+        has_data = any(raw.get(k) for k in out_keys)
+        inb = body.get("t1537InBlock",{})
         if res.status_code == 200 and has_data:
-            for k in all_keys:
+            for k in out_keys:
                 rows = raw[k]
                 if rows:
                     row = rows[0] if isinstance(rows,list) else rows
                     cnt = len(rows) if isinstance(rows,list) else 1
-                    print(f"  ✅ {ep} body={list(body['t1532InBlock'].keys())}")
-                    print(f"     [{k}] {cnt}행, 첫행키: {list(row.keys())}")
-                    print(f"     첫행: {row}")
+                    print(f"  ✅ {ep} {inb} [{k}] {cnt}행")
+                    print(f"     첫행 키: {list(row.keys())}")
+                    print(f"     첫행:   {row}")
         else:
-            inblock = body.get("t1532InBlock",{})
-            print(f"  ✗  {ep} {inblock} → [{rsp_cd}] {rsp_msg or '0행'}")
-        time.sleep(0.15)
+            print(f"  ✗  {ep} {inb} → {res.status_code} [{rsp_cd}] {rsp_msg or '0행'}")
+        time.sleep(0.2)
 
 print("\n완료!")
