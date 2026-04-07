@@ -6,13 +6,19 @@ echo ==============================
 
 cd /d C:\stock_trader
 
+REM 필수 패키지 자동 설치
+echo [설치] 필수 패키지 확인 중...
+pip install PyQt5 requests pyinstaller >nul 2>&1
+echo [설치] 완료
+
 REM config.json 백업 (사용자가 저장한 API 키 보존)
 if exist C:\StockTrader\config.json (
     copy /Y C:\StockTrader\config.json config_backup.json >nul
     echo [백업] 기존 config.json 백업 완료
 )
 
-REM 빌드 (C:\StockTrader 에 직접 출력)
+REM 빌드
+echo [빌드] 빌드 중...
 python -m PyInstaller 주식자동매매.spec --distpath C:\ -y
 
 REM config.json 복원
@@ -26,6 +32,7 @@ if exist config_backup.json (
 )
 
 echo ==============================
-echo  빌드 완료!  실행: C:\StockTrader\StockTrader.exe
+echo  빌드 완료!
+echo  실행: C:\StockTrader\StockTrader.exe
 echo ==============================
 pause
