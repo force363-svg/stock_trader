@@ -52,9 +52,17 @@ DEFAULT_CONFIG = {
 
 def load_config():
     config = json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
-    if os.path.exists(CONFIG_FILE):
+
+    # 읽을 파일 결정: 신규 파일 없으면 구버전 user_settings.json 에서 마이그레이션
+    load_file = CONFIG_FILE
+    if not os.path.exists(CONFIG_FILE):
+        old_file = os.path.join(BASE_DIR, "user_settings.json")
+        if os.path.exists(old_file):
+            load_file = old_file
+
+    if os.path.exists(load_file):
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(load_file, "r", encoding="utf-8") as f:
                 saved = json.load(f)
             # 저장된 값을 DEFAULT에 덮어쓰기 (섹션별 병합)
             for section, values in saved.items():
@@ -62,6 +70,10 @@ def load_config():
                     config[section].update(values)
                 else:
                     config[section] = values
+            # 구버전 파일에서 읽었으면 새 파일로 저장 (마이그레이션)
+            if load_file != CONFIG_FILE:
+                save_config(config)
+                print(f"[설정] 마이그레이션 완료 → {CONFIG_FILE}")
         except Exception as e:
             print(f"[설정] 로드 실패, 기본값 사용: {e}")
     return config
