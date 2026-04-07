@@ -698,8 +698,55 @@ class SettingsDialog(QDialog):
 
 
 # ─────────────────────────────────────────────
-#  데이터 조회 백그라운드 스레드
-#  모든 API 호출을 메인 스레드 밖에서 실행
+#  API 초기 연결 스레드 (토큰 취득 → 첫 데이터 로드)
+#  창을 먼저 띄우고, 연결은 백그라운드에서 처리
+# ─────────────────────────────────────────────
+class ApiInitThread(QThread):
+    connected    = pyqtSignal(bool, str)   # (성공여부, 오류메시지)
+    data_ready   = pyqtSignal(dict)        # 첫 데이터 로드 완료
+
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+
+    def run(self):
+        # 1단계: 토큰 취득
+        try:
+            ok = self.api.get_token()
+        except Exception as e:
+            self.connected.emit(False, str(e))
+            return
+
+        if not ok:
+            self.connected.emit(False, getattr(self.api, 'last_error', '연결 실패'))
+            return
+
+        self.connected.emit(True, "")
+
+        # 2단계: 첫 데이터 로드 (연결 성공 직후)
+        result = {}
+        try:
+            result["holdings"], result["summary"] = self.api.get_holdings_for_ui()
+        except Exception:
+            result["holdings"], result["summary"] = [], {}
+        try:
+            result["kospi"]  = self.api.get_market_index("001")
+            result["kosdaq"] = self.api.get_market_index("301")
+        except Exception:
+            pass
+        try:
+            result["sectors"] = self.api.get_sector_indices()
+        except Exception:
+            result["sectors"] = []
+        try:
+            result["themes"] = self.api.get_themes()
+        except Exception:
+            result["themes"] = []
+        self.data_ready.emit(result)
+
+
+# ─────────────────────────────────────────────
+#  데이터 조회 백그라운드 스레드 (주기적 갱신)
 # ─────────────────────────────────────────────
 class DataFetchThread(QThread):
     done = pyqtSignal(dict)   # 완료 시 결과 dict 전달
@@ -879,23 +926,25 @@ class MainWindow(QMainWindow):
         self.ai_thread      = None # AI 엔진 스레드
         self._fetch_thread  = None # 데이터 조회 스레드 (API 블로킹 방지)
 
-        self._build_ui()
-        self._init_api()
+        self._api_init_thread = None   # API 초기 연결 스레드
 
-        # 30초마다 자동 업데이트 타이머
+        self._build_ui()
+
+        # 타이머들 (창 표시 후 즉시 시작)
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_data)
-        self.refresh_timer.start(30000)  # 30초
+        self.refresh_timer.start(30000)
 
-# 60초마다 자동 재연결 타이머 (미연결 상태일 때만 재시도)
         self.reconnect_timer = QTimer()
         self.reconnect_timer.timeout.connect(self._auto_reconnect)
-        self.reconnect_timer.start(60000)  # 60초
+        self.reconnect_timer.start(60000)
 
-        # 10초마다 AI 신호 파일 읽기
         self.ai_timer = QTimer()
         self.ai_timer.timeout.connect(self._update_ai_signals)
-        self.ai_timer.start(10000)  # 10초
+        self.ai_timer.start(10000)
+
+        # 창이 완전히 뜬 뒤 API 연결 시작 (100ms 후)
+        QTimer.singleShot(100, self._init_api)
 
     def _auto_reconnect(self):
         """60초마다 미연결 상태면 자동 재연결 시도"""
@@ -904,28 +953,35 @@ class MainWindow(QMainWindow):
             self.log_area.append(f"[{now}] 🔄 API 재연결 시도...")
             self._init_api()
     def _init_api(self):
-        """프로그램 시작 시 API 연결 및 초기 데이터 로드"""
+        """API 연결을 백그라운드 스레드로 시작 (UI 블로킹 없음)"""
         now = datetime.now().strftime("%H:%M:%S")
-        self.log_area.append(f"[{now}] 시스템 시작")
-        try:
-            if self.api.get_token():
-                self.api_connected = True
-                self.ls_badge.setText("LS ✅")
-                self.ls_badge.setStyleSheet(
-                    "background-color: #00b89422; color: #00b894; "
-                    "border: 1px solid #00b894; border-radius: 4px; padding: 2px 6px; font-size: 11px;"
-                )
-                self.log_area.append(f"[{now}] LS API 연결 완료")
-                self.refresh_data()
-            else:
-                self.ls_badge.setText("LS ❌")
-                self.ls_badge.setStyleSheet(
-                    "background-color: #d6303122; color: #d63031; "
-                    "border: 1px solid #d63031; border-radius: 4px; padding: 2px 6px; font-size: 11px;"
-                )
-                self.log_area.append(f"[{now}] ❌ LS API 연결 실패 - {self.api.last_error}")
-        except Exception as e:
-            self.log_area.append(f"[{now}] ❌ API 오류: {e}")
+        self.log_area.append(f"[{now}] API 연결 중...")
+        self.ls_badge.setText("LS ⏳")
+
+        self._api_init_thread = ApiInitThread(self.api)
+        self._api_init_thread.connected.connect(self._on_api_connected)
+        self._api_init_thread.data_ready.connect(self._on_fetch_done)
+        self._api_init_thread.start()
+
+    def _on_api_connected(self, ok: bool, error: str):
+        """API 연결 결과 수신 (메인 스레드)"""
+        now = datetime.now().strftime("%H:%M:%S")
+        if ok:
+            self.api_connected = True
+            self.ls_badge.setText("LS ✅")
+            self.ls_badge.setStyleSheet(
+                "background-color: #00b89422; color: #00b894; "
+                "border: 1px solid #00b894; border-radius: 4px; padding: 2px 6px; font-size: 11px;"
+            )
+            self.log_area.append(f"[{now}] LS API 연결 완료")
+        else:
+            self.api_connected = False
+            self.ls_badge.setText("LS ❌")
+            self.ls_badge.setStyleSheet(
+                "background-color: #d6303122; color: #d63031; "
+                "border: 1px solid #d63031; border-radius: 4px; padding: 2px 6px; font-size: 11px;"
+            )
+            self.log_area.append(f"[{now}] ❌ LS API 연결 실패 - {error}")
 
     def refresh_data(self):
         """백그라운드 스레드로 API 데이터 조회 시작 (UI 블로킹 없음)"""
@@ -2229,7 +2285,9 @@ class MainWindow(QMainWindow):
             self.ai_thread.stop()
             self.ai_thread.wait(3000)
         if self._fetch_thread and self._fetch_thread.isRunning():
-            self._fetch_thread.wait(3000)
+            self._fetch_thread.wait(2000)
+        if self._api_init_thread and self._api_init_thread.isRunning():
+            self._api_init_thread.wait(2000)
         event.accept()
 
 
