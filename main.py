@@ -738,21 +738,83 @@ class MainWindow(QMainWindow):
                 print(f"[시장지수] {name} 파싱 실패: {e}")
 
     def _update_sector_table(self):
-        """업종지수 테이블 업데이트"""
-        if not hasattr(self, 'sector_table'):
+        """업종지수 차트형 카드로 업데이트"""
+        if not hasattr(self, 'sector_chart_layout'):
             return
         sectors = self.api.get_sector_indices()
         if not sectors:
             return
-        self.sector_table.setRowCount(len(sectors))
-        for r, s in enumerate(sectors):
-            vals = [s["name"], s["index"], s["change"], s["foreign"], s["inst"]]
-            for c, val in enumerate(vals):
-                item = QTableWidgetItem(val)
-                item.setTextAlignment(Qt.AlignCenter)
-                if c == 2 and val not in ["-", ""]:
-                    item.setForeground(QColor("#ff6b6b") if val.startswith("+") else QColor("#74b9ff"))
-                self.sector_table.setItem(r, c, item)
+
+        # 기존 카드 제거 (stretch 남김)
+        while self.sector_chart_layout.count() > 1:
+            item = self.sector_chart_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 등락률 최대값 (바 크기 기준)
+        rates = []
+        for s in sectors:
+            try:
+                v = float(s["change"].replace("%", "").replace("+", ""))
+                rates.append(abs(v))
+            except:
+                rates.append(0)
+        max_rate = max(rates) if rates else 1.0
+
+        for s, rate_abs in zip(sectors, rates):
+            chg = s["change"]
+            idx = s["index"]
+            name = s["name"]
+            is_up = chg.startswith("+")
+            bar_color  = "#ff6b6b" if is_up else "#74b9ff"
+            text_color = "#ff6b6b" if is_up else "#74b9ff"
+
+            card = QFrame()
+            card.setStyleSheet("background-color: #16213e; border-radius: 3px;")
+            card.setFixedHeight(36)
+            cl = QHBoxLayout(card)
+            cl.setContentsMargins(6, 2, 6, 2)
+            cl.setSpacing(4)
+
+            # 업종명
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet("color: #c0c0c0; font-size: 11px;")
+            name_lbl.setFixedWidth(58)
+
+            # 지수값
+            idx_lbl = QLabel(idx)
+            idx_lbl.setStyleSheet("color: #ffffff; font-size: 11px; font-weight: bold;")
+            idx_lbl.setFixedWidth(58)
+            idx_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            # 등락률 바 (미니 차트)
+            bar_widget = QWidget()
+            bar_widget.setFixedHeight(18)
+            bar_layout = QHBoxLayout(bar_widget)
+            bar_layout.setContentsMargins(0, 0, 0, 0)
+            bar_layout.setSpacing(0)
+
+            bar_fill = QFrame()
+            fill_w = max(4, int(80 * rate_abs / max(max_rate, 0.01)))
+            bar_fill.setFixedWidth(fill_w)
+            bar_fill.setFixedHeight(14)
+            bar_fill.setStyleSheet(f"background-color: {bar_color}; border-radius: 2px;")
+            bar_layout.addWidget(bar_fill)
+            bar_layout.addStretch()
+
+            # 등락률 텍스트
+            chg_lbl = QLabel(chg)
+            chg_lbl.setStyleSheet(f"color: {text_color}; font-size: 11px; font-weight: bold;")
+            chg_lbl.setFixedWidth(52)
+            chg_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            cl.addWidget(name_lbl)
+            cl.addWidget(idx_lbl)
+            cl.addWidget(bar_widget, stretch=1)
+            cl.addWidget(chg_lbl)
+
+            self.sector_chart_layout.insertWidget(
+                self.sector_chart_layout.count() - 1, card)
 
     def _build_ui(self):
         central = QWidget()
@@ -970,27 +1032,25 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # 업종지수
+        # 업종지수 (차트형 카드)
         grp_sector = QGroupBox("📊 업종지수")
-        sector_layout = QVBoxLayout(grp_sector)
-        sector_table = QTableWidget()
-        sector_table.setColumnCount(5)
-        sector_table.setHorizontalHeaderLabels(["업종명", "지수", "등락률", "외국인", "기관"])
-        sector_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        sector_table.setAlternatingRowColors(True)
-        sector_table.setStyleSheet("QTableWidget { alternate-background-color: #1a2744; }")
-        sector_table.setRowCount(0)
-        hdr = sector_table.horizontalHeader()
-        hdr.setSectionResizeMode(0, QHeaderView.Stretch)        # 업종명: 가변
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # 지수
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 등락률
-        hdr.setSectionResizeMode(3, QHeaderView.Fixed)          # 외국인
-        hdr.setSectionResizeMode(4, QHeaderView.Fixed)          # 기관
-        sector_table.setColumnWidth(3, 45)
-        sector_table.setColumnWidth(4, 45)
-        self.sector_table = sector_table
-        sector_layout.addWidget(sector_table)
+        sector_outer = QVBoxLayout(grp_sector)
+        sector_outer.setContentsMargins(4, 4, 4, 4)
+        sector_outer.setSpacing(0)
 
+        sector_scroll = QScrollArea()
+        sector_scroll.setWidgetResizable(True)
+        sector_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        sector_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        sector_inner = QWidget()
+        self.sector_chart_layout = QVBoxLayout(sector_inner)
+        self.sector_chart_layout.setSpacing(2)
+        self.sector_chart_layout.setContentsMargins(0, 0, 0, 0)
+        self.sector_chart_layout.addStretch()
+
+        sector_scroll.setWidget(sector_inner)
+        sector_outer.addWidget(sector_scroll)
         layout.addWidget(grp_sector)
         return widget
 
