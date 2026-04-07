@@ -52,6 +52,12 @@ class LSApi:
             print(f"[LS API] ❌ 토큰 발급 실패: {e}")
             return False
 
+    def ensure_token(self) -> bool:
+        """토큰 유효 확인 후 없으면 재발급"""
+        if not self.access_token:
+            return self.get_token()
+        return True
+
     def _headers(self, tr_cd):
         return {
             "Content-Type" : "application/json; charset=utf-8",
