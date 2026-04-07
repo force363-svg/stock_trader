@@ -338,49 +338,36 @@ class LSApi:
     #  업종지수 조회 (t8424)
     # ─────────────────────────────────────
     def get_sector_indices(self):
-        """주요 업종지수 조회 (t8424)"""
+        """전업종지수 조회 (t8425 - HTS 1512 화면)"""
         if not self.ensure_token():
             return []
-        sector_codes = [
-            ("전기전자", "013"),
-            ("의약품",   "009"),
-            ("금융",     "020"),
-            ("자동차",   "015"),
-            ("철강금속", "011"),
-            ("서비스",   "024"),
-        ]
-        results = []
         url = f"{self.base_url}/stock/sector"
-        for name, code in sector_codes:
-            body = {"t8424InBlock": {"upcode": code}}
-            try:
-                res = requests.post(url, headers=self._headers("t8424"),
-                                    json=body, timeout=5)
-                res.raise_for_status()
-                data = res.json().get("t8424OutBlock", {})
-                if data:
-                    pricejisu = float(data.get("pricejisu", 0))
-                    jniljisu  = float(data.get("jniljisu", 0))
-                    if jniljisu > 0:
-                        change = ((pricejisu - jniljisu) / jniljisu) * 100
-                    else:
-                        change = 0.0
-                    sign = "+" if change >= 0 else ""
-                    results.append({
-                        "name":    name,
-                        "index":   f"{pricejisu:,.2f}",
-                        "change":  f"{sign}{change:.2f}%",
-                        "foreign": "-",
-                        "inst":    "-",
-                    })
-                else:
-                    results.append({"name": name, "index": "-", "change": "-",
-                                     "foreign": "-", "inst": "-"})
-            except Exception as e:
-                print(f"[LS API] 업종({name}) 조회 실패: {e}")
-                results.append({"name": name, "index": "-", "change": "-",
-                                 "foreign": "-", "inst": "-"})
-        return results
+        body = {"t8425InBlock": {"gubun": "0"}}  # 0=코스피 업종 전체
+        try:
+            res = requests.post(url, headers=self._headers("t8425"),
+                                json=body, timeout=10)
+            res.raise_for_status()
+            rows = res.json().get("t8425OutBlock", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            results = []
+            for row in rows[:10]:
+                name      = row.get("hname", "-").strip()
+                pricejisu = float(row.get("pricejisu", 0))
+                jniljisu  = float(row.get("jniljisu", 0))
+                change    = ((pricejisu - jniljisu) / jniljisu * 100) if jniljisu > 0 else 0.0
+                sign      = "+" if change >= 0 else ""
+                results.append({
+                    "name":    name,
+                    "index":   f"{pricejisu:,.2f}",
+                    "change":  f"{sign}{change:.2f}%",
+                    "foreign": "-",
+                    "inst":    "-",
+                })
+            return results
+        except Exception as e:
+            print(f"[LS API] ❌ 전업종지수(t8425) 조회 실패: {e}")
+            return []
 
 
 # ─────────────────────────────────────
