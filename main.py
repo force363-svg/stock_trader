@@ -1224,6 +1224,31 @@ class MainWindow(QMainWindow):
 
         self.ai_signals = signals
 
+        # 보유종목 AI판단 컬럼 즉시 갱신 (신호 업데이트 시 항상 반영)
+        self._refresh_holdings_ai_column()
+
+    def _refresh_holdings_ai_column(self):
+        """보유종목 테이블의 AI판단 컬럼만 갱신 (신호 변경 시 호출)"""
+        if not hasattr(self, 'holdings_table'):
+            return
+        sell_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "SELL"}
+        for row in range(self.holdings_table.rowCount()):
+            if row >= len(self.holdings_data):
+                break
+            code = self.holdings_data[row].get("raw_code", "")
+            if code in sell_codes:
+                ai_text, ai_color = "매도", "#ff6b6b"
+            else:
+                ai_text, ai_color = "보유", "#fdcb6e"
+            item = self.holdings_table.item(row, 8)
+            if item is None:
+                item = QTableWidgetItem()
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                item.setTextAlignment(Qt.AlignCenter)
+                self.holdings_table.setItem(row, 8, item)
+            item.setText(ai_text)
+            item.setForeground(QColor(ai_color))
+
     def _apply_market_index(self, name: str, data):
         """KOSPI/KOSDAQ 지수 UI 적용 (메인 스레드)"""
         if not data or name not in self.market_labels:
