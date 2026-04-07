@@ -899,9 +899,17 @@ class AIEngineThread(QThread):
         self.status_signal.emit("[AI엔진] 시작 중...")
         try:
             import sys, os
-            _root = os.path.dirname(os.path.abspath(__file__))
-            if _root not in sys.path:
-                sys.path.insert(0, _root)
+            # frozen exe / 개발 환경 모두 대응
+            if getattr(sys, 'frozen', False):
+                _root = os.path.dirname(sys.executable)
+                # PyInstaller onedir: sys._MEIPASS에 패키지 있음
+                _pkg  = getattr(sys, '_MEIPASS', _root)
+            else:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                _pkg  = _root
+            for p in (_root, _pkg):
+                if p not in sys.path:
+                    sys.path.insert(0, p)
 
             # 필수 패키지 확인
             try:
@@ -983,9 +991,12 @@ class AIEngineThread(QThread):
                 time.sleep(5)   # 5초마다 체크 (명령/간격 변경 빠른 반영)
 
         except Exception as e:
-            self.status_signal.emit(f"[AI엔진] ❌ 오류: {e}")
+            import traceback
+            self.status_signal.emit(f"[AI엔진] ❌ 오류: {type(e).__name__}: {e}")
+            self.status_signal.emit(f"[AI엔진] 상세: {traceback.format_exc().splitlines()[-1]}")
         finally:
-            self.status_signal.emit("[AI엔진] 정지됨")
+            if self._running:   # 정상 정지가 아닌 오류 종료
+                self.status_signal.emit("[AI엔진] 비정상 종료")
 
     def stop(self):
         self._running = False
