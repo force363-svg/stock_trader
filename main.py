@@ -2142,33 +2142,50 @@ class MainWindow(QMainWindow):
         else:
             self.log_area.append(f"[{now}] ❌ 매수 실패: {name}")
 
-    # ── AI 엔진 시작/정지 ──
-    def toggle_ai_engine(self):
-        now = datetime.now().strftime("%H:%M:%S")
-        if self.ai_thread and self.ai_thread.isRunning():
-            # 정지
-            self.ai_thread.stop()
-            self.ai_thread.wait(3000)
-            self.ai_thread = None
+    def _set_ai_btn_state(self, running: bool):
+        """AI 엔진 버튼 상태 즉시 반영"""
+        if running:
+            self.btn_ai_engine.setText("⏹ AI엔진 정지")
+            self.btn_ai_engine.setStyleSheet(
+                "background-color: #00b894; color: #fff; border: none; "
+                "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
+            )
+        else:
             self.btn_ai_engine.setText("🤖 AI엔진 시작")
             self.btn_ai_engine.setStyleSheet(
                 "background-color: #6c5ce7; color: #fff; border: none; "
                 "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
             )
-            self.log_area.append(f"[{now}] ⏸ AI 엔진 정지")
+        self.btn_ai_engine.setEnabled(True)
+
+    # ── AI 엔진 시작/정지 ──
+    def toggle_ai_engine(self):
+        now = datetime.now().strftime("%H:%M:%S")
+        if self.ai_thread and self.ai_thread.isRunning():
+            # ── 정지 요청: 버튼 즉시 변경 후 비동기 종료 ──
+            self.btn_ai_engine.setEnabled(False)   # 중복 클릭 방지
+            self.btn_ai_engine.setText("⏹ 정지 중...")
+            self.ai_thread.stop()
+            # 스레드 종료 시그널로 버튼 복원 (블로킹 없음)
+            self.ai_thread.finished.connect(self._on_ai_engine_stopped)
+            self.log_area.append(f"[{now}] ⏸ AI 엔진 정지 요청")
         else:
-            # 시작
+            # ── 시작 ──
             self.ai_thread = AIEngineThread(mode=self.trade_mode)
             self.ai_thread.status_signal.connect(
                 lambda msg: self.log_area.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
             )
+            self.ai_thread.finished.connect(self._on_ai_engine_stopped)
             self.ai_thread.start()
-            self.btn_ai_engine.setText("🤖 AI엔진 정지")
-            self.btn_ai_engine.setStyleSheet(
-                "background-color: #00b894; color: #fff; border: none; "
-                "font-weight: bold; padding: 6px 12px; border-radius: 4px;"
-            )
+            self._set_ai_btn_state(True)
             self.log_area.append(f"[{now}] ▶ AI 엔진 시작")
+
+    def _on_ai_engine_stopped(self):
+        """AI 스레드 완전 종료 후 버튼 복원 (메인 스레드)"""
+        self.ai_thread = None
+        self._set_ai_btn_state(False)
+        now = datetime.now().strftime("%H:%M:%S")
+        self.log_area.append(f"[{now}] ⏹ AI 엔진 정지 완료")
 
     # ── 자동매매 시작/정지 ──
     def toggle_trading(self):
@@ -2283,11 +2300,11 @@ class MainWindow(QMainWindow):
         """창 닫을 때 백그라운드 스레드 정리"""
         if self.ai_thread and self.ai_thread.isRunning():
             self.ai_thread.stop()
-            self.ai_thread.wait(3000)
+            self.ai_thread.wait(2000)
         if self._fetch_thread and self._fetch_thread.isRunning():
-            self._fetch_thread.wait(2000)
+            self._fetch_thread.wait(1000)
         if self._api_init_thread and self._api_init_thread.isRunning():
-            self._api_init_thread.wait(2000)
+            self._api_init_thread.wait(1000)
         event.accept()
 
 
