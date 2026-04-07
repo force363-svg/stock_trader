@@ -15,6 +15,12 @@ echo [1/3] 최신 코드 받는 중...
 git pull origin main
 echo.
 
+REM ── engine_config.json 복사 (없을 때만 → 기존 설정 보존) ──
+if not exist "C:\StockTrader\engine_config.json" (
+    copy "C:\stock_trader\engine_config.json" "C:\StockTrader\engine_config.json" >nul
+    echo engine_config.json 복사 완료
+)
+
 REM ── 실전투자 빌드 ──
 echo [2/3] 실전투자 빌드 중...
 if exist build rmdir /s /q build
