@@ -1889,10 +1889,8 @@ class MainWindow(QMainWindow):
             hold_codes = {s.get("stock_code") for s in self.ai_signals if s.get("signal_type") == "HOLD"}
             if code in sell_codes:
                 ai_text, ai_color = "매도", "#ff6b6b"
-            elif code in hold_codes:
-                ai_text, ai_color = "보유", "#fdcb6e"
             else:
-                ai_text, ai_color = "-", "#636e72"
+                ai_text, ai_color = "보유", "#fdcb6e"
             ai_item = QTableWidgetItem(ai_text)
             ai_item.setTextAlignment(Qt.AlignCenter)
             ai_item.setForeground(QColor(ai_color))
