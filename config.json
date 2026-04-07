@@ -19,7 +19,10 @@
   "api": {
     "ls_app_key": "PSjuivZ6b7KnGajxpO0sqkocEUuiE8Sll5oe",
     "ls_app_secret": "XEDwjFFuEpLUVrzyz6rEzG1UIg9IlzU3",
-    "krx_key": ""
+    "ls_mock_key": "",
+    "ls_mock_secret": "",
+    "krx_key": "",
+    "trade_mode": "real"
   },
   "notify": {
     "kakao_token": "",

@@ -222,9 +222,11 @@ class SettingsDialog(QDialog):
         for i, val in enumerate(c["profit"]["profit_stages"]):
             self.profit_edits[i].setValue(val)
         self.spin_loss.setValue(c["profit"]["loss_cut"])
-        self.edit_ls_key.setText(c["api"]["ls_app_key"])
-        self.edit_ls_secret.setText(c["api"]["ls_app_secret"])
-        self.edit_krx_key.setText(c["api"]["krx_key"])
+        self.edit_ls_key.setText(c["api"].get("ls_app_key", ""))
+        self.edit_ls_secret.setText(c["api"].get("ls_app_secret", ""))
+        self.edit_mock_key.setText(c["api"].get("ls_mock_key", ""))
+        self.edit_mock_secret.setText(c["api"].get("ls_mock_secret", ""))
+        self.edit_krx_key.setText(c["api"].get("krx_key", ""))
         self.edit_kakao.setText(c["notify"]["kakao_token"])
         self.edit_telegram.setText(c["notify"]["telegram_token"])
         self.edit_chat_id.setText(c["notify"]["telegram_chat_id"])
@@ -242,6 +244,8 @@ class SettingsDialog(QDialog):
         self.config["profit"]["loss_cut"]      = self.spin_loss.value()
         self.config["api"]["ls_app_key"]       = self.edit_ls_key.text()
         self.config["api"]["ls_app_secret"]    = self.edit_ls_secret.text()
+        self.config["api"]["ls_mock_key"]      = self.edit_mock_key.text()
+        self.config["api"]["ls_mock_secret"]   = self.edit_mock_secret.text()
         self.config["api"]["krx_key"]          = self.edit_krx_key.text()
         self.config["notify"]["kakao_token"]   = self.edit_kakao.text()
         self.config["notify"]["telegram_token"]= self.edit_telegram.text()
@@ -376,29 +380,64 @@ class SettingsDialog(QDialog):
         w = QWidget()
         layout = QVBoxLayout(w)
 
-        grp_ls = QGroupBox("LS투자증권 API")
-        grid = QGridLayout(grp_ls)
-        fields = [
+        # LS투자증권 로그인
+        grp_login = QGroupBox("LS투자증권 로그인")
+        grid_login = QGridLayout(grp_login)
+        login_fields = [
             ("아이디:", "edit_ls_id"),
             ("비밀번호:", "edit_ls_pw"),
-            ("App Key:", "edit_ls_key"),
-            ("App Secret:", "edit_ls_secret"),
         ]
-        for i, (label, attr) in enumerate(fields):
-            grid.addWidget(QLabel(label), i, 0)
+        for i, (label, attr) in enumerate(login_fields):
+            grid_login.addWidget(QLabel(label), i, 0)
             edit = QLineEdit()
-            if "비밀번호" in label or "Secret" in label:
+            if "비밀번호" in label:
                 edit.setEchoMode(QLineEdit.Password)
             setattr(self, attr, edit)
-            grid.addWidget(edit, i, 1)
+            grid_login.addWidget(edit, i, 1)
+        # 인증서 경로
+        grid_login.addWidget(QLabel("인증서 경로:"), 2, 0)
+        self.edit_cert_path = QLineEdit()
+        self.edit_cert_path.setPlaceholderText("실투자 시 공인인증서 폴더 경로 (선택)")
+        grid_login.addWidget(self.edit_cert_path, 2, 1)
 
+        # 실투자 API (실계좌)
+        grp_real = QGroupBox("실투자 API (실계좌)")
+        grid_real = QGridLayout(grp_real)
+        grid_real.addWidget(QLabel("App Key:"), 0, 0)
+        self.edit_ls_key = QLineEdit()
+        grid_real.addWidget(self.edit_ls_key, 0, 1)
+        grid_real.addWidget(QLabel("App Secret:"), 1, 0)
+        self.edit_ls_secret = QLineEdit()
+        self.edit_ls_secret.setEchoMode(QLineEdit.Password)
+        grid_real.addWidget(self.edit_ls_secret, 1, 1)
+        note_real = QLabel("* LS투자증권 OpenAPI에서 실투자용 키 발급")
+        note_real.setStyleSheet("color: #888; font-size: 10px;")
+        grid_real.addWidget(note_real, 2, 0, 1, 2)
+
+        # 모의투자 API (모의계좌)
+        grp_mock = QGroupBox("모의투자 API (모의계좌)")
+        grid_mock = QGridLayout(grp_mock)
+        grid_mock.addWidget(QLabel("App Key:"), 0, 0)
+        self.edit_mock_key = QLineEdit()
+        grid_mock.addWidget(self.edit_mock_key, 0, 1)
+        grid_mock.addWidget(QLabel("App Secret:"), 1, 0)
+        self.edit_mock_secret = QLineEdit()
+        self.edit_mock_secret.setEchoMode(QLineEdit.Password)
+        grid_mock.addWidget(self.edit_mock_secret, 1, 1)
+        note_mock = QLabel("* LS투자증권 OpenAPI에서 모의투자용 키 발급 (포트 29443)")
+        note_mock.setStyleSheet("color: #888; font-size: 10px;")
+        grid_mock.addWidget(note_mock, 2, 0, 1, 2)
+
+        # 한국거래소(KRX) API
         grp_krx = QGroupBox("한국거래소(KRX) API")
         grid2 = QGridLayout(grp_krx)
         grid2.addWidget(QLabel("KRX API Key:"), 0, 0)
         self.edit_krx_key = QLineEdit()
         grid2.addWidget(self.edit_krx_key, 0, 1)
 
-        layout.addWidget(grp_ls)
+        layout.addWidget(grp_login)
+        layout.addWidget(grp_real)
+        layout.addWidget(grp_mock)
         layout.addWidget(grp_krx)
         layout.addStretch()
         return w
@@ -480,7 +519,9 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(DARK_STYLE)
 
         # API 초기화
-        self.api = LSApi()
+        config = load_config()
+        self.trade_mode = config["api"].get("trade_mode", "real")
+        self.api = LSApi(mode=self.trade_mode)
         self.api_connected = False
         self.is_trading = False
         self.holdings_data = []  # 보유종목 원본 데이터
@@ -612,8 +653,19 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(self.open_settings)
         layout.addWidget(self.btn_settings)
 
-        self.btn_sim = QPushButton("📊 모의")
-        layout.addWidget(self.btn_sim)
+        self.trade_mode = "real"
+        self.btn_mock = QPushButton("모의")
+        self.btn_mock.setCheckable(True)
+        self.btn_mock.setStyleSheet("padding: 2px 8px; font-size: 11px;")
+        self.btn_mock.clicked.connect(lambda: self.switch_trade_mode("mock"))
+        layout.addWidget(self.btn_mock)
+
+        self.btn_real = QPushButton("실전")
+        self.btn_real.setCheckable(True)
+        self.btn_real.setChecked(True)
+        self.btn_real.setStyleSheet("padding: 2px 8px; font-size: 11px;")
+        self.btn_real.clicked.connect(lambda: self.switch_trade_mode("real"))
+        layout.addWidget(self.btn_real)
 
         self.btn_stop = QPushButton("⏹ 정지")
         self.btn_stop.setObjectName("btn_stop")
@@ -1097,12 +1149,30 @@ class MainWindow(QMainWindow):
             self.summary_labels["매매상태"].setText(status)
             self.summary_labels["매매상태"].setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
+    # ── 모의/실전 전환 ──
+    def switch_trade_mode(self, mode):
+        now = datetime.now().strftime("%H:%M:%S")
+        self.trade_mode = mode
+        # 버튼 상태 업데이트
+        self.btn_mock.setChecked(mode == "mock")
+        self.btn_real.setChecked(mode == "real")
+        # config에 모드 저장
+        config = load_config()
+        config["api"]["trade_mode"] = mode
+        save_config(config)
+        # API 재연결
+        mode_name = "모의투자" if mode == "mock" else "실전투자"
+        self.log_area.append(f"[{now}] 투자모드: {mode_name}")
+        self.api = LSApi(mode=mode)
+        self.api_connected = False
+        self._init_api()
+
     # ── 설정 창 열기 ──
     def open_settings(self):
         dlg = SettingsDialog(self)
         if dlg.exec_() == QDialog.Accepted:
             # 설정 저장 후 API 키가 변경됐을 수 있으므로 재연결
-            self.api = LSApi()
+            self.api = LSApi(mode=self.trade_mode)
             self.api_connected = False
             self._init_api()
 

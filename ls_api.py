@@ -3,14 +3,22 @@ import json
 from datetime import datetime
 from config import load_config
 
-# LS Open API 기본 URL
-BASE_URL = "https://openapi.ls-sec.co.kr:8080"
+# LS Open API URL
+URL_REAL = "https://openapi.ls-sec.co.kr:8080"
+URL_MOCK = "https://openapi.ls-sec.co.kr:29443"
 
 class LSApi:
-    def __init__(self):
+    def __init__(self, mode="real"):
         self.config = load_config()
-        self.app_key    = self.config["api"]["ls_app_key"]
-        self.app_secret = self.config["api"]["ls_app_secret"]
+        self.mode = mode
+        if mode == "mock":
+            self.base_url   = URL_MOCK
+            self.app_key    = self.config["api"].get("ls_mock_key", "")
+            self.app_secret = self.config["api"].get("ls_mock_secret", "")
+        else:
+            self.base_url   = URL_REAL
+            self.app_key    = self.config["api"].get("ls_app_key", "")
+            self.app_secret = self.config["api"].get("ls_app_secret", "")
         self.access_token = None
         self.token_expire = None
         self.last_error = ""
@@ -19,7 +27,7 @@ class LSApi:
     #  토큰 발급
     # ─────────────────────────────────────
     def get_token(self):
-        url = f"{BASE_URL}/oauth2/token"
+        url = f"{self.base_url}/oauth2/token"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
             "grant_type"   : "client_credentials",
@@ -60,7 +68,7 @@ class LSApi:
             if not self.get_token():
                 return None
 
-        url = f"{BASE_URL}/stock/accno"
+        url = f"{self.base_url}/stock/accno"
         body = {
             "CSPAQ12300InBlock1": {
                 "BalCreTp"   : "0",
@@ -178,7 +186,7 @@ class LSApi:
             if not self.get_token():
                 return None
 
-        url = f"{BASE_URL}/stock/market-data"
+        url = f"{self.base_url}/stock/market-data"
         body = {
             "t1102InBlock": {
                 "shcode": stock_code
@@ -204,7 +212,7 @@ class LSApi:
             if not self.get_token():
                 return None
 
-        url = f"{BASE_URL}/stock/order"
+        url = f"{self.base_url}/stock/order"
         ord_prc_ptn_cd = "03" if price == 0 else "00"
         body = {
             "CSPAT00601InBlock1": {
@@ -237,7 +245,7 @@ class LSApi:
             if not self.get_token():
                 return None
 
-        url = f"{BASE_URL}/stock/order"
+        url = f"{self.base_url}/stock/order"
         ord_prc_ptn_cd = "03" if price == 0 else "00"
         body = {
             "CSPAT00601InBlock1": {

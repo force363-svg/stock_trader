@@ -27,7 +27,10 @@ DEFAULT_CONFIG = {
     "api": {
         "ls_app_key": "",
         "ls_app_secret": "",
-        "krx_key": ""
+        "ls_mock_key": "",
+        "ls_mock_secret": "",
+        "krx_key": "",
+        "trade_mode": "real"
     },
     "notify": {
         "kakao_token": "",
