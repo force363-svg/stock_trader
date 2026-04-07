@@ -797,12 +797,19 @@ class AIEngineThread(QThread):
 
     def run(self):
         self._running = True
-        self.status_signal.emit(f"[AI엔진] 시작 (모드: {self.mode})")
+        self.status_signal.emit("[AI엔진] 시작 중...")
         try:
             import sys, os
             _root = os.path.dirname(os.path.abspath(__file__))
             if _root not in sys.path:
                 sys.path.insert(0, _root)
+
+            # 필수 패키지 확인
+            try:
+                import numpy  # noqa
+            except ImportError:
+                self.status_signal.emit("❌ [AI엔진] numpy 미설치 → pip install numpy pandas 실행 필요")
+                return
 
             from ai_engine.db.database          import init_db
             from ai_engine.data.ls_data_fetcher import LSDataFetcher
@@ -2161,8 +2168,8 @@ class MainWindow(QMainWindow):
     def toggle_ai_engine(self):
         now = datetime.now().strftime("%H:%M:%S")
         if self.ai_thread and self.ai_thread.isRunning():
-            # ── 정지 요청: 버튼 즉시 변경 후 비동기 종료 ──
-            self.btn_ai_engine.setEnabled(False)   # 중복 클릭 방지
+            # ── 정지 요청 ──
+            self.btn_ai_engine.setEnabled(False)
             self.btn_ai_engine.setText("🤖 정지 중...")
             self.btn_ai_engine.setStyleSheet(
                 "background-color: #636e72; color: #dfe6e9; "
@@ -2170,26 +2177,35 @@ class MainWindow(QMainWindow):
                 "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
             )
             self.ai_thread.stop()
-            # 스레드 종료 시그널로 버튼 복원 (블로킹 없음)
-            self.ai_thread.finished.connect(self._on_ai_engine_stopped)
             self.log_area.append(f"[{now}] ⏸ AI 엔진 정지 요청")
         else:
             # ── 시작 ──
             self.ai_thread = AIEngineThread(mode=self.trade_mode)
-            self.ai_thread.status_signal.connect(
-                lambda msg: self.log_area.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
-            )
+            self.ai_thread.status_signal.connect(self._on_ai_status)
+            # finished는 한 번만 연결 (중복 방지)
             self.ai_thread.finished.connect(self._on_ai_engine_stopped)
             self.ai_thread.start()
             self._set_ai_btn_state(True)
             self.log_area.append(f"[{now}] ▶ AI 엔진 시작")
 
+    def _on_ai_status(self, msg: str):
+        """AI 엔진 상태 메시지 수신"""
+        now = datetime.now().strftime("%H:%M:%S")
+        self.log_area.append(f"[{now}] {msg}")
+        # 오류 발생 시 버튼 즉시 꺼짐 상태로 전환
+        if "오류" in msg or "❌" in msg:
+            self._set_ai_btn_state(False)
+
     def _on_ai_engine_stopped(self):
-        """AI 스레드 완전 종료 후 버튼 복원 (메인 스레드)"""
+        """AI 스레드 종료 → 버튼 꺼짐 상태 복원"""
+        if self.ai_thread:
+            try:
+                self.ai_thread.finished.disconnect(self._on_ai_engine_stopped)
+                self.ai_thread.status_signal.disconnect(self._on_ai_status)
+            except Exception:
+                pass
         self.ai_thread = None
         self._set_ai_btn_state(False)
-        now = datetime.now().strftime("%H:%M:%S")
-        self.log_area.append(f"[{now}] ⏹ AI 엔진 정지 완료")
 
     # ── 자동매매 시작/정지 ──
     def toggle_trading(self):
