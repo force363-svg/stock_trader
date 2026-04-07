@@ -439,40 +439,53 @@ class LSApi:
         """테마 내 종목 조회 (t1532, /stock/investinfo)"""
         if not self.ensure_token():
             return []
-        url = f"{self.base_url}/stock/investinfo"
-        body = {"t1532InBlock": {"tmcode": tmcode}}
-        try:
-            res = requests.post(url, headers=self._headers("t1532"),
-                                json=body, timeout=10)
-            if res.status_code != 200:
-                print(f"[t1532] HTTP {res.status_code}: {res.text[:200]}")
-                return []
-            raw = res.json()
-            rows = raw.get("t1532OutBlock", [])
-            if isinstance(rows, dict):
-                rows = [rows]
-            result = []
-            for r in rows:
-                name = r.get("hname", r.get("isuNm", "")).strip()
-                shcode = r.get("shcode", r.get("isu_cd", ""))
-                try:
-                    price = int(float(r.get("price", r.get("close", 0))))
-                    price_str = f"{price:,}"
-                except:
-                    price_str = "-"
-                try:
-                    diff = float(r.get("diff", r.get("rate", 0)))
-                    sign = "+" if diff >= 0 else ""
-                    diff_str = f"{sign}{diff:.2f}%"
-                except:
-                    diff_str = "-"
-                if name:
-                    result.append((name, price_str, diff_str, shcode))
-            print(f"[t1532] 테마({tmcode}) 종목: {len(result)}개")
-            return result
-        except Exception as e:
-            print(f"[LS API] ❌ 테마종목 조회 실패: {e}")
-            return []
+        body_t1532 = {"t1532InBlock": {"tmcode": tmcode}}
+        body_t1537 = {"t1537InBlock": {"tmcode": tmcode}}
+        # 엔드포인트 + TR 우선순위 시도
+        attempts = [
+            ("/stock/market-data", "t1532", body_t1532),
+            ("/stock/market-data", "t1537", body_t1537),
+            ("/stock/sector",      "t1532", body_t1532),
+            ("/stock/sector",      "t1537", body_t1537),
+        ]
+        for endpoint, tr_cd, body in attempts:
+            try:
+                res = requests.post(f"{self.base_url}{endpoint}",
+                                    headers=self._headers(tr_cd),
+                                    json=body, timeout=10)
+                if res.status_code != 200:
+                    continue
+                raw = res.json()
+                # OutBlock1 우선, 없으면 OutBlock
+                rows = (raw.get(f"{tr_cd}OutBlock1") or
+                        raw.get(f"{tr_cd}OutBlock") or [])
+                if isinstance(rows, dict):
+                    rows = [rows]
+                if not rows:
+                    continue
+                result = []
+                for r in rows:
+                    name = r.get("hname", r.get("isuNm", "")).strip()
+                    shcode = r.get("shcode", r.get("isu_cd", ""))
+                    try:
+                        price = int(float(r.get("price", r.get("close", 0))))
+                        price_str = f"{price:,}"
+                    except:
+                        price_str = "-"
+                    try:
+                        diff = float(r.get("diff", r.get("rate", 0)))
+                        sign = "+" if diff >= 0 else ""
+                        diff_str = f"{sign}{diff:.2f}%"
+                    except:
+                        diff_str = "-"
+                    if name:
+                        result.append((name, price_str, diff_str, shcode))
+                print(f"[{tr_cd}] ✅ 테마({tmcode}) 종목 {len(result)}개 ({endpoint})")
+                return result
+            except Exception as e:
+                print(f"[{tr_cd}] {endpoint} 오류: {e}")
+        print(f"[테마종목] ❌ tmcode={tmcode} 조회 실패")
+        return []
 
     # ─────────────────────────────────────
     #  업종지수 조회 (t1511 반복 호출)

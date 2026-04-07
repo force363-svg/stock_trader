@@ -1,8 +1,8 @@
 """
-t1532 원시 응답 확인 + t8425 연속조회(tr_cont=Y) 테스트
+t1532 /stock/market-data 테스트
 실행: python debug_api.py
 """
-import json, requests, time
+import requests, time
 from config import load_config
 
 config = load_config()
@@ -17,68 +17,77 @@ res = requests.post(f"{base}/oauth2/token",
 token = res.json().get("access_token","")
 print("토큰 OK\n")
 
-def hdr(tr_cd, cont="N"):
+def hdr(tr_cd):
     return {
         "Content-Type" : "application/json; charset=utf-8",
         "authorization": f"Bearer {token}",
         "tr_cd"        : tr_cd,
-        "tr_cont"      : cont,
+        "tr_cont"      : "N",
+        "tr_cont_key"  : "",
     }
 
-# ── 1. t1532 전체 응답 키 확인 ──
-print("=== t1532 원시 응답 ===")
-res = requests.post(f"{base}/stock/sector",
-    headers=hdr("t1532"),
-    json={"t1532InBlock": {"tmcode": "0008"}}, timeout=10)
-raw = res.json()
-print(f"HTTP: {res.status_code}")
-print(f"모든 키: {list(raw.keys())}")
-for k, v in raw.items():
-    if isinstance(v, list):
-        print(f"  [{k}] 리스트 {len(v)}행" + (f", 첫행: {v[0]}" if v else ""))
+tmcode = "0008"
+
+# t1532 - 모든 엔드포인트
+print("=== t1532 테마별종목 ===")
+for ep in ["/stock/market-data", "/stock/investinfo", "/stock/sector"]:
+    res = requests.post(f"{base}{ep}", headers=hdr("t1532"),
+        json={"t1532InBlock": {"tmcode": tmcode}}, timeout=10)
+    raw = res.json()
+    rows = raw.get("t1532OutBlock", [])
+    rsp_cd  = raw.get("rsp_cd","?")
+    rsp_msg = raw.get("rsp_msg","")
+    # OutBlock 또는 OutBlock1 모두 확인
+    rows1 = raw.get("t1532OutBlock1", rows)
+    display_rows = rows1 if rows1 else rows
+    if res.status_code == 200 and display_rows:
+        row = display_rows[0] if isinstance(display_rows, list) else display_rows
+        cnt = len(display_rows) if isinstance(display_rows, list) else 1
+        key_used = "t1532OutBlock1" if rows1 else "t1532OutBlock"
+        print(f"  ✅ {ep} [{key_used}] → {cnt}행")
+        print(f"     첫행 키: {list(row.keys())}")
+        print(f"     첫행: {row}")
     else:
-        print(f"  [{k}] = {v}")
+        print(f"  ✗  {ep} → HTTP {res.status_code} [{rsp_cd}] {rsp_msg}, 응답키: {list(raw.keys())}")
+    time.sleep(0.2)
 
-time.sleep(0.3)
-
-# ── 2. t8425 첫 행에 diff 필드 있는지 다시 확인 ──
-print("\n=== t8425 첫 3행 전체 필드 ===")
-res = requests.post(f"{base}/stock/sector",
-    headers=hdr("t8425"),
-    json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
-rows = res.json().get("t8425OutBlock", [])
-for row in rows[:3]:
-    print(f"  {row}")
-
-time.sleep(0.3)
-
-# ── 3. t8425 연속조회 (tr_cont=Y) 로 추가 필드 있는지 확인 ──
-print("\n=== t8425 연속조회 헤더(tr_cont=Y) ===")
-res = requests.post(f"{base}/stock/sector",
-    headers=hdr("t8425", "Y"),
-    json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
-raw2 = res.json()
-rows2 = raw2.get("t8425OutBlock", [])
-print(f"HTTP: {res.status_code}, 행수: {len(rows2)}")
-if rows2:
-    print(f"첫행 키: {list(rows2[0].keys())}")
-    print(f"첫행: {rows2[0]}")
-
-time.sleep(0.3)
-
-# ── 4. t1533 /stock/sector 전체 응답 확인 ──
-print("\n=== t1533 /stock/sector 전체 응답 ===")
-res = requests.post(f"{base}/stock/sector",
-    headers=hdr("t1533"),
-    json={"t1533InBlock": {"gubun": "0"}}, timeout=10)
-raw3 = res.json()
-print(f"모든 키: {list(raw3.keys())}")
-for k, v in raw3.items():
-    if isinstance(v, list):
-        print(f"  [{k}] 리스트 {len(v)}행" + (f", 첫행: {v[0]}" if v else ""))
-    elif isinstance(v, dict):
-        print(f"  [{k}] dict: {v}")
+# t1533 - /stock/market-data
+print("\n=== t1533 테마별시세 ===")
+for ep in ["/stock/market-data", "/stock/investinfo", "/stock/sector"]:
+    res = requests.post(f"{base}{ep}", headers=hdr("t1533"),
+        json={"t1533InBlock": {"gubun": "0"}}, timeout=10)
+    raw = res.json()
+    rows = raw.get("t1533OutBlock", [])
+    rsp_cd  = raw.get("rsp_cd","?")
+    rsp_msg = raw.get("rsp_msg","")
+    if res.status_code == 200 and rows:
+        row = rows[0] if isinstance(rows, list) else rows
+        cnt = len(rows) if isinstance(rows, list) else 1
+        print(f"  ✅ {ep} → {cnt}행, 첫행 키: {list(row.keys())}")
+        print(f"     첫행: {row}")
     else:
-        print(f"  [{k}] = {v}")
+        print(f"  ✗  {ep} → HTTP {res.status_code} [{rsp_cd}] {rsp_msg}")
+    time.sleep(0.2)
+
+# t1537 대안 테스트
+print("\n=== t1537 대안 테마별종목 ===")
+for ep in ["/stock/market-data", "/stock/sector"]:
+    res = requests.post(f"{base}{ep}", headers=hdr("t1537"),
+        json={"t1537InBlock": {"tmcode": tmcode}}, timeout=10)
+    raw = res.json()
+    # OutBlock 또는 OutBlock1 확인
+    rows  = raw.get("t1537OutBlock", [])
+    rows1 = raw.get("t1537OutBlock1", [])
+    display = rows1 if rows1 else rows
+    rsp_cd  = raw.get("rsp_cd","?")
+    rsp_msg = raw.get("rsp_msg","")
+    if res.status_code == 200 and display:
+        row = display[0] if isinstance(display, list) else display
+        cnt = len(display) if isinstance(display, list) else 1
+        print(f"  ✅ {ep} → {cnt}행, 첫행 키: {list(row.keys())}")
+        print(f"     첫행: {row}")
+    else:
+        print(f"  ✗  {ep} → HTTP {res.status_code} [{rsp_cd}] {rsp_msg}, 응답키: {list(raw.keys())}")
+    time.sleep(0.2)
 
 print("\n완료!")
