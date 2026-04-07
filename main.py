@@ -537,6 +537,18 @@ class MainWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.refresh_data)
         self.refresh_timer.start(30000)  # 30초
 
+        # 60초마다 자동 재연결 타이머 (미연결 상태일 때만 재시도)
+        self.reconnect_timer = QTimer()
+        self.reconnect_timer.timeout.connect(self._auto_reconnect)
+        self.reconnect_timer.start(60000)  # 60초
+
+    def _auto_reconnect(self):
+        """60초마다 미연결 상태면 자동 재연결 시도"""
+        if not self.api_connected:
+            now = datetime.now().strftime("%H:%M:%S")
+            self.log_area.append(f"[{now}] 🔄 API 재연결 시도...")
+            self._init_api()
+
     def _init_api(self):
         """프로그램 시작 시 API 연결 및 초기 데이터 로드"""
         now = datetime.now().strftime("%H:%M:%S")

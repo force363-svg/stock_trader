@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 from datetime import datetime
 from config import load_config
 
@@ -20,8 +21,18 @@ class LSApi:
             self.app_key    = self.config["api"].get("ls_app_key", "")
             self.app_secret = self.config["api"].get("ls_app_secret", "")
         self.access_token = None
-        self.token_expire = None
+        self.token_expire_at = 0   # 토큰 만료 시각 (unix timestamp)
         self.last_error = ""
+
+    def _is_token_valid(self):
+        """토큰이 존재하고 만료되지 않았으면 True (만료 60초 전부터 갱신)"""
+        return self.access_token and time.time() < self.token_expire_at - 60
+
+    def ensure_token(self):
+        """토큰이 유효하지 않으면 재발급"""
+        if not self._is_token_valid():
+            return self.get_token()
+        return True
 
     # ─────────────────────────────────────
     #  토큰 발급
@@ -48,7 +59,6 @@ class LSApi:
             result = res.json()
             self.access_token = result.get("access_token")
             if not self.access_token:
-                # API 서버 에러 메시지 표시
                 rsp_msg = result.get("rsp_msg", "")
                 rsp_cd = result.get("rsp_cd", "")
                 if rsp_msg:
@@ -57,8 +67,11 @@ class LSApi:
                     self.last_error = f"토큰 응답 이상: {result}"
                 print(f"[LS API] ❌ {self.last_error}")
                 return False
+            # 만료 시간 저장 (expires_in 없으면 기본 86400초=24시간)
+            expires_in = int(result.get("expires_in", 86400))
+            self.token_expire_at = time.time() + expires_in
             self.last_error = ""
-            print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}...")
+            print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}... (만료:{expires_in}초)")
             return True
         except requests.exceptions.ConnectionError as e:
             self.last_error = "LS 서버 연결 실패 - 네트워크 확인"
@@ -85,9 +98,8 @@ class LSApi:
     #  잔고 조회 (CSPAQ12300)
     # ─────────────────────────────────────
     def get_balance(self):
-        if not self.access_token:
-            if not self.get_token():
-                return None
+        if not self.ensure_token():
+            return None
 
         url = f"{self.base_url}/stock/accno"
         body = {
@@ -101,9 +113,16 @@ class LSApi:
         try:
             res = requests.post(url, headers=self._headers("CSPAQ12300"),
                                 json=body, timeout=10)
+            # 401: 토큰 만료 → 재발급 후 1회 재시도
+            if res.status_code == 401:
+                print("[LS API] 토큰 만료 - 재발급 시도")
+                if self.get_token():
+                    res = requests.post(url, headers=self._headers("CSPAQ12300"),
+                                        json=body, timeout=10)
+                else:
+                    return None
             res.raise_for_status()
             data = res.json()
-            # OutBlock2 = 계좌요약 (dict), OutBlock3 = 보유종목 리스트 (list)
             out2 = data.get("CSPAQ12300OutBlock2", {})
             out3 = data.get("CSPAQ12300OutBlock3", [])
             if isinstance(out3, dict):
