@@ -5,21 +5,22 @@ from datetime import datetime
 from config import load_config
 
 # LS Open API URL
-URL_REAL = "https://openapi.ls-sec.co.kr:8080"
-URL_MOCK = "https://openapi.ls-sec.co.kr:29443"
+# 실전/모의 모두 동일한 REST API 서버 (포트 8080)
+# 포트 29443 = WebSocket 실시간 시세 전용 (모의투자)
+# 포트 9443  = WebSocket 실시간 시세 전용 (실전투자)
+URL_BASE = "https://openapi.ls-sec.co.kr:8080"
 
 class LSApi:
     def __init__(self, mode="real"):
         self.config = load_config()
         self.mode = mode
+        # 실전/모의 모두 동일한 REST API 서버 사용
+        # 차이점: 실전키(ls_app_key) vs 모의키(ls_mock_key)
+        self.base_url = URL_BASE
         if mode == "mock":
-            # 모의투자: 포트 29443, 모의 전용 키 사용
-            self.base_url   = URL_MOCK
             self.app_key    = self.config["api"].get("ls_mock_key", "")
             self.app_secret = self.config["api"].get("ls_mock_secret", "")
         else:
-            # 실전투자: 포트 8080, 실전 키 사용
-            self.base_url   = URL_REAL
             self.app_key    = self.config["api"].get("ls_app_key", "")
             self.app_secret = self.config["api"].get("ls_app_secret", "")
         self.access_token = None
@@ -55,12 +56,8 @@ class LSApi:
             "appsecretkey" : self.app_secret,
             "scope"        : "oob"
         }
-        timeout = 30 if self.mode == "mock" else 10
-        verify = False if self.mode == "mock" else True
         try:
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            res = requests.post(url, headers=headers, data=data, timeout=timeout, verify=verify)
+            res = requests.post(url, headers=headers, data=data, timeout=10)
             res.raise_for_status()
             result = res.json()
             self.access_token = result.get("access_token")
@@ -116,16 +113,15 @@ class LSApi:
                 "UprcTpCd"   : "0"
             }
         }
-        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAQ12300"),
-                                json=body, timeout=10, verify=verify)
+                                json=body, timeout=10)
             # 401: 토큰 만료 → 재발급 후 1회 재시도
             if res.status_code == 401:
                 print("[LS API] 토큰 만료 - 재발급 시도")
                 if self.get_token():
                     res = requests.post(url, headers=self._headers("CSPAQ12300"),
-                                        json=body, timeout=10, verify=verify)
+                                        json=body, timeout=10)
                 else:
                     return None
             res.raise_for_status()
@@ -239,10 +235,9 @@ class LSApi:
                 "shcode": stock_code
             }
         }
-        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("t1102"),
-                                json=body, timeout=10, verify=verify)
+                                json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
             out = data.get("t1102OutBlock", {})
@@ -274,10 +269,9 @@ class LSApi:
                 "OrdCndiTpCd" : "0"
             }
         }
-        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAT00601"),
-                                json=body, timeout=10, verify=verify)
+                                json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
             mode_tag = "[모의]" if self.mode == "mock" else ""
@@ -310,10 +304,9 @@ class LSApi:
                 "OrdCndiTpCd" : "0"
             }
         }
-        verify = False if self.mode == "mock" else True
         try:
             res = requests.post(url, headers=self._headers("CSPAT00601"),
-                                json=body, timeout=10, verify=verify)
+                                json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
             mode_tag = "[모의]" if self.mode == "mock" else ""
