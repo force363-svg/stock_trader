@@ -6,6 +6,10 @@ echo ==============================
 
 cd /d C:\stock_trader
 
+REM ── 실행 중인 프로그램 자동 종료 ──
+taskkill /F /IM StockTrader_Real.exe /T >nul 2>&1
+taskkill /F /IM StockTrader_Mock.exe /T >nul 2>&1
+
 REM ── 최신 코드 받기 ──
 echo [1/4] 최신 코드 받는 중...
 git pull origin main
@@ -25,7 +29,7 @@ REM ── 실전투자 빌드 ──
 echo.
 echo [3/4] 실전투자 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 실전투자.spec --distpath C:\StockTrader -y --clean >nul 2>&1
+python -m PyInstaller real.spec --distpath C:\StockTrader -y --clean >nul 2>&1
 if errorlevel 1 (
     echo [오류] 실전투자 빌드 실패
     pause
@@ -37,7 +41,7 @@ REM ── 모의투자 빌드 ──
 echo.
 echo [4/4] 모의투자 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 모의투자.spec --distpath C:\StockTrader -y --clean
+python -m PyInstaller mock.spec --distpath C:\StockTrader -y --clean >nul 2>&1
 if errorlevel 1 (
     echo [오류] 모의투자 빌드 실패
     pause
