@@ -371,20 +371,15 @@ class LSApi:
     #  상승테마 조회 (t8425) - /stock/investinfo
     # ─────────────────────────────────────
     def get_themes(self):
-        """상승테마 조회 (t8425, /stock/investinfo)
-        diff(등락률) 기준 내림차순 정렬 → 상위 상승 테마 반환
+        """상승테마 조회 (t8425)
+        1차: /stock/investinfo (diff 포함 가능)
+        2차: /stock/sector (확실히 작동, tmname/tmcode)
+        diff 기준 내림차순 정렬
         """
         if not self.ensure_token():
             return []
-        url = f"{self.base_url}/stock/investinfo"
-        body = {"t8425InBlock": {"dummy": ""}}
-        try:
-            res = requests.post(url, headers=self._headers("t8425"),
-                                json=body, timeout=10)
-            if res.status_code != 200:
-                print(f"[t8425] HTTP {res.status_code}: {res.text[:200]}")
-                return []
-            rows = res.json().get("t8425OutBlock", [])
+
+        def _parse(rows):
             result = []
             for r in rows:
                 name = r.get("tmname", "").strip()
@@ -395,20 +390,46 @@ class LSApi:
                 except:
                     diff = 0.0
                 sign = "+" if diff >= 0 else ""
+                diff_str = f"{sign}{diff:.2f}%" if diff != 0 else "-"
                 result.append({
                     "name": name,
                     "code": r.get("tmcode", ""),
                     "diff": diff,
-                    "diff_str": f"{sign}{diff:.2f}%",
+                    "diff_str": diff_str,
                 })
-            # 등락률 내림차순 정렬
-            result.sort(key=lambda x: x["diff"], reverse=True)
-            print(f"[LS API] ✅ 상승테마 조회 완료: {len(result)}개, "
-                  f"1위: {result[0]['name']} {result[0]['diff_str']}" if result else "")
             return result
-        except Exception as e:
-            print(f"[LS API] ❌ 상승테마 조회 실패: {e}")
-            return []
+
+        # 1차: /stock/investinfo
+        for endpoint, body in [
+            ("/stock/investinfo", {"t8425InBlock": {"dummy": ""}}),
+            ("/stock/sector",     {"t8425InBlock": {"gubun": "0"}}),
+        ]:
+            try:
+                res = requests.post(f"{self.base_url}{endpoint}",
+                                    headers=self._headers("t8425"),
+                                    json=body, timeout=10)
+                print(f"[t8425] {endpoint} → HTTP {res.status_code}")
+                if res.status_code != 200:
+                    continue
+                raw = res.json()
+                print(f"[t8425] 응답키: {list(raw.keys())}")
+                rows = raw.get("t8425OutBlock", [])
+                if not rows:
+                    print(f"[t8425] 빈 응답, 다음 엔드포인트 시도")
+                    continue
+                # 첫 행 키 출력 (디버그)
+                first = rows[0] if isinstance(rows, list) else rows
+                print(f"[t8425] 첫행 키: {list(first.keys())}, diff={first.get('diff','없음')}")
+                result = _parse(rows if isinstance(rows, list) else [rows])
+                result.sort(key=lambda x: x["diff"], reverse=True)
+                print(f"[LS API] ✅ 상승테마 {len(result)}개 ({endpoint})"
+                      + (f", 1위: {result[0]['name']} {result[0]['diff_str']}" if result else ""))
+                return result
+            except Exception as e:
+                print(f"[t8425] {endpoint} 오류: {e}")
+
+        print("[LS API] ❌ 상승테마 조회 실패 (모든 엔드포인트)")
+        return []
 
     # ─────────────────────────────────────
     #  테마별 종목 조회 (t1532)
