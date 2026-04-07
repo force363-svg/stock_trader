@@ -1,53 +1,32 @@
 import requests
 import json
-import time
 from datetime import datetime
 from config import load_config
 
 # LS Open API URL
-# 실전/모의 모두 동일한 REST API 서버 (포트 8080)
-# 포트 29443 = WebSocket 실시간 시세 전용 (모의투자)
-# 포트 9443  = WebSocket 실시간 시세 전용 (실전투자)
-URL_BASE = "https://openapi.ls-sec.co.kr:8080"
+URL_REAL = "https://openapi.ls-sec.co.kr:8080"
+URL_MOCK = "https://openapi.ls-sec.co.kr:29443"
 
 class LSApi:
     def __init__(self, mode="real"):
         self.config = load_config()
         self.mode = mode
-        # 실전/모의 모두 동일한 REST API 서버 사용
-        # 차이점: 실전키(ls_app_key) vs 모의키(ls_mock_key)
-        self.base_url = URL_BASE
         if mode == "mock":
+            self.base_url   = URL_MOCK
             self.app_key    = self.config["api"].get("ls_mock_key", "")
             self.app_secret = self.config["api"].get("ls_mock_secret", "")
         else:
+            self.base_url   = URL_REAL
             self.app_key    = self.config["api"].get("ls_app_key", "")
             self.app_secret = self.config["api"].get("ls_app_secret", "")
         self.access_token = None
-        self.token_expire_at = 0   # 토큰 만료 시각 (unix timestamp)
+        self.token_expire = None
         self.last_error = ""
-
-    def _is_token_valid(self):
-        """토큰이 존재하고 만료되지 않았으면 True (만료 60초 전부터 갱신)"""
-        return self.access_token and time.time() < self.token_expire_at - 60
-
-    def ensure_token(self):
-        """토큰이 유효하지 않으면 재발급"""
-        if not self._is_token_valid():
-            return self.get_token()
-        return True
 
     # ─────────────────────────────────────
     #  토큰 발급
     # ─────────────────────────────────────
     def get_token(self):
-        # 앱키 유효성 검사
-        if not self.app_key or not self.app_secret:
-            mode_name = "모의투자" if self.mode == "mock" else "실전투자"
-            self.last_error = f"{mode_name} App Key/Secret이 비어있습니다. 설정 > API 계정 설정에서 입력하세요."
-            print(f"[LS API] ❌ {self.last_error}")
-            return False
-
         url = f"{self.base_url}/oauth2/token"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
@@ -62,28 +41,12 @@ class LSApi:
             result = res.json()
             self.access_token = result.get("access_token")
             if not self.access_token:
-                rsp_msg = result.get("rsp_msg", "")
-                rsp_cd = result.get("rsp_cd", "")
-                if rsp_msg:
-                    self.last_error = f"[{rsp_cd}] {rsp_msg}"
-                else:
-                    self.last_error = f"토큰 응답 이상: {result}"
+                self.last_error = f"토큰 응답 이상: {result}"
                 print(f"[LS API] ❌ {self.last_error}")
                 return False
-            # 만료 시간 저장 (expires_in 없으면 기본 86400초=24시간)
-            expires_in = int(result.get("expires_in", 86400))
-            self.token_expire_at = time.time() + expires_in
             self.last_error = ""
-            print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}... (만료:{expires_in}초)")
+            print(f"[LS API] ✅ 토큰 발급 성공: {self.access_token[:20]}...")
             return True
-        except requests.exceptions.ConnectionError as e:
-            self.last_error = "LS 서버 연결 실패 - 네트워크 확인"
-            print(f"[LS API] ❌ {self.last_error}: {e}")
-            return False
-        except requests.exceptions.Timeout:
-            self.last_error = f"LS 서버 응답 시간 초과 - 포트 {'29443' if self.mode == 'mock' else '8080'}"
-            print(f"[LS API] ❌ {self.last_error}")
-            return False
         except Exception as e:
             self.last_error = str(e)
             print(f"[LS API] ❌ 토큰 발급 실패: {e}")
@@ -101,8 +64,9 @@ class LSApi:
     #  잔고 조회 (CSPAQ12300)
     # ─────────────────────────────────────
     def get_balance(self):
-        if not self.ensure_token():
-            return None
+        if not self.access_token:
+            if not self.get_token():
+                return None
 
         url = f"{self.base_url}/stock/accno"
         body = {
@@ -116,16 +80,9 @@ class LSApi:
         try:
             res = requests.post(url, headers=self._headers("CSPAQ12300"),
                                 json=body, timeout=10)
-            # 401: 토큰 만료 → 재발급 후 1회 재시도
-            if res.status_code == 401:
-                print("[LS API] 토큰 만료 - 재발급 시도")
-                if self.get_token():
-                    res = requests.post(url, headers=self._headers("CSPAQ12300"),
-                                        json=body, timeout=10)
-                else:
-                    return None
             res.raise_for_status()
             data = res.json()
+            # OutBlock2 = 계좌요약 (dict), OutBlock3 = 보유종목 리스트 (list)
             out2 = data.get("CSPAQ12300OutBlock2", {})
             out3 = data.get("CSPAQ12300OutBlock3", [])
             if isinstance(out3, dict):
@@ -250,7 +207,7 @@ class LSApi:
     #  주식 매수 주문 (CSPAT00601)
     # ─────────────────────────────────────
     def buy_order(self, stock_code, qty, price=0):
-        """price=0 이면 시장가 주문. 실전/모의 모두 실제 체결"""
+        """price=0 이면 시장가 주문"""
         if not self.access_token:
             if not self.get_token():
                 return None
@@ -274,8 +231,7 @@ class LSApi:
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
-            mode_tag = "[모의]" if self.mode == "mock" else ""
-            print(f"[LS API] ✅ {mode_tag}매수 주문 완료 - {stock_code} {qty}주")
+            print(f"[LS API] ✅ 매수 주문 완료 - {stock_code} {qty}주")
             return data
         except Exception as e:
             print(f"[LS API] ❌ 매수 주문 실패: {e}")
@@ -285,7 +241,6 @@ class LSApi:
     #  주식 매도 주문 (CSPAT00601)
     # ─────────────────────────────────────
     def sell_order(self, stock_code, qty, price=0):
-        """실전/모의 모두 실제 체결"""
         if not self.access_token:
             if not self.get_token():
                 return None
@@ -309,8 +264,7 @@ class LSApi:
                                 json=body, timeout=10)
             res.raise_for_status()
             data = res.json()
-            mode_tag = "[모의]" if self.mode == "mock" else ""
-            print(f"[LS API] ✅ {mode_tag}매도 주문 완료 - {stock_code} {qty}주")
+            print(f"[LS API] ✅ 매도 주문 완료 - {stock_code} {qty}주")
             return data
         except Exception as e:
             print(f"[LS API] ❌ 매도 주문 실패: {e}")
@@ -486,6 +440,202 @@ class LSApi:
                 print(f"[{tr_cd}] {endpoint} 오류: {e}")
         print(f"[테마종목] ❌ tmcode={tmcode} 조회 실패")
         return []
+
+    # ─────────────────────────────────────
+    #  일봉 데이터 조회 (t1305)
+    #  최근 n봉 OHLCV 반환
+    # ─────────────────────────────────────
+    def get_daily_ohlcv(self, stock_code: str, count: int = 250) -> list:
+        """
+        일봉 OHLCV 조회 (t1305)
+        반환: [{"date","open","high","low","close","volume"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/chart"
+        body = {
+            "t1305InBlock": {
+                "shcode"  : stock_code,
+                "dwmcode" : "2",        # 1=일봉, 2=주봉, 3=월봉 → 1 사용
+                "date"    : "",
+                "cnt"     : count,
+                "cts_date": ""
+            }
+        }
+        # 일봉 파라미터 수정
+        body["t1305InBlock"]["dwmcode"] = "1"
+        try:
+            res = requests.post(url, headers=self._headers("t1305"),
+                                json=body, timeout=15)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t1305OutBlock1", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    result.append({
+                        "date"  : str(r.get("date", "")),
+                        "open"  : int(float(r.get("open",  0))),
+                        "high"  : int(float(r.get("high",  0))),
+                        "low"   : int(float(r.get("low",   0))),
+                        "close" : int(float(r.get("close", 0))),
+                        "volume": int(float(r.get("jdiff_vol", r.get("volume", 0))))
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 일봉 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  분봉 데이터 조회 (t8410)
+    # ─────────────────────────────────────
+    def get_minute_ohlcv(self, stock_code: str, tick_range: int = 60,
+                         count: int = 100) -> list:
+        """
+        분봉 OHLCV 조회 (t8410)
+        tick_range: 1/3/5/10/15/30/60/120 분봉
+        반환: [{"time","open","high","low","close","volume"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/chart"
+        body = {
+            "t8410InBlock": {
+                "shcode"    : stock_code,
+                "ncnt"      : tick_range,
+                "qrycnt"    : count,
+                "nday"      : "0",
+                "sdate"     : "",
+                "stime"     : "",
+                "edate"     : "",
+                "etime"     : "",
+                "cts_date"  : "",
+                "cts_time"  : "",
+                "comp_yn"   : "N"
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t8410"),
+                                json=body, timeout=15)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t8410OutBlock1", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    result.append({
+                        "time"  : str(r.get("date", "") + r.get("time", "")),
+                        "open"  : int(float(r.get("open",   0))),
+                        "high"  : int(float(r.get("high",   0))),
+                        "low"   : int(float(r.get("low",    0))),
+                        "close" : int(float(r.get("close",  0))),
+                        "volume": int(float(r.get("jdiff_vol", r.get("volume", 0))))
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 분봉 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  외인/기관 수급 조회 (t1716)
+    #  최근 5일 순매수 데이터
+    # ─────────────────────────────────────
+    def get_supply_demand(self, stock_code: str, count: int = 5) -> list:
+        """
+        외인/기관 수급 조회 (t1716)
+        반환: [{"date","foreign_net","inst_net","total_net"}, ...] 최신순
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/investinfo"
+        body = {
+            "t1716InBlock": {
+                "shcode" : stock_code,
+                "gubun"  : "0",   # 0=일별
+                "cnt"    : count
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t1716"),
+                                json=body, timeout=10)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            rows = data.get("t1716OutBlock1", data.get("t1716OutBlock", []))
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    foreign_net = int(float(r.get("forgn_netq",  r.get("for_netqty",  0))))
+                    inst_net    = int(float(r.get("orgn_netq",   r.get("org_netqty",  0))))
+                    result.append({
+                        "date"       : str(r.get("date", "")),
+                        "foreign_net": foreign_net,
+                        "inst_net"   : inst_net,
+                        "total_net"  : foreign_net + inst_net
+                    })
+                except:
+                    continue
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 수급 조회 실패({stock_code}): {e}")
+            return []
+
+    # ─────────────────────────────────────
+    #  전종목 리스트 조회 (t8430)
+    # ─────────────────────────────────────
+    def get_stock_list(self, market: str = "0") -> list:
+        """
+        전종목 코드/이름 조회 (t8430)
+        market: 0=전체, 1=코스피, 2=코스닥
+        반환: [{"code","name","market","price"}, ...]
+        """
+        if not self.ensure_token():
+            return []
+        url = f"{self.base_url}/stock/market-data"
+        body = {
+            "t8430InBlock": {
+                "gubun": market
+            }
+        }
+        try:
+            res = requests.post(url, headers=self._headers("t8430"),
+                                json=body, timeout=20)
+            if res.status_code != 200:
+                print(f"[LS API] ❌ 전종목 조회 실패: HTTP {res.status_code}")
+                return []
+            data = res.json()
+            rows = data.get("t8430OutBlock", [])
+            if isinstance(rows, dict):
+                rows = [rows]
+            result = []
+            for r in rows:
+                try:
+                    code  = r.get("shcode", "").strip()
+                    name  = r.get("hname",  "").strip()
+                    mkt   = "KOSPI" if r.get("gubun", "") == "1" else "KOSDAQ"
+                    price = int(float(r.get("price", 0)))
+                    if code and name:
+                        result.append({"code": code, "name": name,
+                                       "market": mkt, "price": price})
+                except:
+                    continue
+            print(f"[LS API] ✅ 전종목 {len(result)}개")
+            return result
+        except Exception as e:
+            print(f"[LS API] ❌ 전종목 조회 실패: {e}")
+            return []
 
     # ─────────────────────────────────────
     #  업종지수 조회 (t1511 반복 호출)
