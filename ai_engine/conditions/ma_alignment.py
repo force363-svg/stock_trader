@@ -4,7 +4,6 @@
 - 200일선 상승 여부
 - 50일선 > 200일선 여부
 """
-import numpy as np
 from .base import BaseCondition
 
 

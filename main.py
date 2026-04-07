@@ -911,13 +911,6 @@ class AIEngineThread(QThread):
                 if p not in sys.path:
                     sys.path.insert(0, p)
 
-            # 필수 패키지 확인
-            try:
-                import numpy  # noqa
-            except ImportError:
-                self.status_signal.emit("❌ [AI엔진] numpy 미설치 → pip install numpy pandas 실행 필요")
-                return
-
             from ai_engine.db.database          import init_db
             from ai_engine.data.ls_data_fetcher import LSDataFetcher
             from ai_engine.core.scanner         import Scanner
