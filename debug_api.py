@@ -1,9 +1,8 @@
 """
-t1537 날짜/시간 파라미터 추가 테스트
+t8425 실시간 코드 → t1532 즉시 호출 (0.5초 딜레이)
 실행: python debug_api.py
 """
 import requests, time
-from datetime import datetime
 from config import load_config
 
 config = load_config()
@@ -16,57 +15,46 @@ res = requests.post(f"{base}/oauth2/token",
     data={"grant_type":"client_credentials","appkey":app_key,"appsecretkey":app_secret,"scope":"oob"},
     timeout=10)
 token = res.json().get("access_token","")
-today = datetime.now().strftime("%Y%m%d")
-now_time = datetime.now().strftime("%H%M%S")
-print(f"토큰 OK, 오늘={today}, 시간={now_time}\n")
+print("토큰 OK\n")
 
-def hdr(tr_cd, cont="N"):
+def hdr(tr_cd):
     return {
         "Content-Type" : "application/json; charset=utf-8",
         "authorization": f"Bearer {token}",
         "tr_cd"        : tr_cd,
-        "tr_cont"      : cont,
+        "tr_cont"      : "N",
         "tr_cont_key"  : "",
     }
 
-# t1537 다양한 날짜/구분 조합
-bodies = [
-    {"t1537InBlock": {"gubun": "0", "date": today}},
-    {"t1537InBlock": {"gubun": "0", "date": today, "time": now_time}},
-    {"t1537InBlock": {"date": today}},
-    {"t1537InBlock": {"date": today, "tmcode": ""}},
-    {"t1537InBlock": {"gubun": "0", "upcode": ""}},
-    {"t1537InBlock": {"gubun": "0", "upcode": "001"}},
-]
+# Step 1: t8425로 실시간 tmcode 수신
+print("=== Step 1: t8425 실시간 테마 목록 ===")
+res = requests.post(f"{base}/stock/sector", headers=hdr("t8425"),
+    json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
+themes = res.json().get("t8425OutBlock", [])
+print(f"수신: {len(themes)}개 테마")
+print(f"처음 5개: {[(t['tmcode'], t['tmname'][:10]) for t in themes[:5]]}\n")
 
-print("=== t1537 /stock/sector 파라미터 조합 ===")
-for body in bodies:
-    res = requests.post(f"{base}/stock/sector", headers=hdr("t1537"),
-        json=body, timeout=10)
+time.sleep(0.5)
+
+# Step 2: 받은 코드로 t1532 즉시 호출 (처음 5개만)
+print("=== Step 2: t1532 즉시 호출 (실시간 코드 사용) ===")
+for t in themes[:5]:
+    tmcode = t["tmcode"]
+    tmname = t["tmname"]
+    time.sleep(0.5)  # 문서 권장 딜레이
+    res = requests.post(f"{base}/stock/sector", headers=hdr("t1532"),
+        json={"t1532InBlock": {"tmcode": tmcode}}, timeout=10)
     raw = res.json()
-    rows = raw.get("t1537OutBlock", [])
-    rsp_cd = raw.get("rsp_cd","?")
-    inb = body.get("t1537InBlock",{})
-    if isinstance(rows, list) and rows:
-        row = rows[0]
-        has_data = any(v for v in row.values() if v)
-        print(f"  {'✅' if has_data else '⚠ '} {inb}")
-        print(f"     {len(rows)}행, 첫행: {row}")
-    elif isinstance(rows, dict) and any(rows.values()):
-        print(f"  ✅ {inb} dict: {rows}")
-    else:
-        print(f"  ✗  {inb} → [{rsp_cd}] 0행 또는 빈값")
-    time.sleep(0.3)
-
-# 연속조회(tr_cont=Y) 시도
-print("\n=== t1537 연속조회 tr_cont=Y ===")
-res = requests.post(f"{base}/stock/sector",
-    headers=hdr("t1537", "Y"),
-    json={"t1537InBlock": {"gubun": "0"}}, timeout=10)
-raw = res.json()
-rows = raw.get("t1537OutBlock", [])
-print(f"HTTP {res.status_code}, 행수: {len(rows) if isinstance(rows,list) else 1}")
-if rows:
-    print(f"첫행: {rows[0] if isinstance(rows,list) else rows}")
+    # 전체 응답 키 출력
+    print(f"\n[{tmcode}] {tmname[:15]}")
+    print(f"  HTTP {res.status_code}, 응답 키: {list(raw.keys())}")
+    for k, v in raw.items():
+        if k in ("rsp_cd", "rsp_msg"):
+            print(f"  {k}: {v}")
+        elif isinstance(v, list):
+            print(f"  [{k}] {len(v)}행" + (f", 첫행: {v[0]}" if v else " (비어있음)"))
+        elif isinstance(v, dict):
+            has = any(val for val in v.values() if val)
+            print(f"  [{k}] dict {'(데이터있음)' if has else '(빈값)'}: {v}")
 
 print("\n완료!")
