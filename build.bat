@@ -20,9 +20,9 @@ python -m pip install PyQt5 requests pyinstaller 2>&1
 echo.
 
 REM user_settings.json 백업 (API 키 보호)
-if exist C:\StockTrader_Real\user_settings.json (
-    copy /Y C:\StockTrader_Real\user_settings.json user_settings_backup.json >nul
-    echo [백업] 실전 user_settings.json 백업 완료
+if exist C:\StockTrader\StockTrader_Real\user_settings.json (
+    copy /Y C:\StockTrader\StockTrader_Real\user_settings.json user_settings_backup.json >nul
+    echo [백업] user_settings.json 백업 완료
 )
 
 REM ==============================
@@ -31,13 +31,13 @@ REM ==============================
 echo.
 echo [빌드] 실전투자 (StockTrader_Real) 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 실전투자.spec --distpath C:\ -y --clean 2>&1
+python -m PyInstaller 실전투자.spec --distpath C:\StockTrader -y --clean 2>&1
 if errorlevel 1 (
     echo [오류] 실전투자 빌드 실패!
     pause
     exit /b 1
 )
-echo [완료] 실전투자 빌드 완료 → C:\StockTrader_Real\StockTrader_Real.exe
+echo [완료] 실전투자 빌드 완료 → C:\StockTrader\StockTrader_Real\StockTrader_Real.exe
 
 REM ==============================
 REM  2. 모의투자 빌드
@@ -45,18 +45,18 @@ REM ==============================
 echo.
 echo [빌드] 모의투자 (StockTrader_Mock) 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 모의투자.spec --distpath C:\ -y --clean 2>&1
+python -m PyInstaller 모의투자.spec --distpath C:\StockTrader -y --clean 2>&1
 if errorlevel 1 (
     echo [오류] 모의투자 빌드 실패!
     pause
     exit /b 1
 )
-echo [완료] 모의투자 빌드 완료 → C:\StockTrader_Mock\StockTrader_Mock.exe
+echo [완료] 모의투자 빌드 완료 → C:\StockTrader\StockTrader_Mock\StockTrader_Mock.exe
 
 REM user_settings.json 복원
 if exist user_settings_backup.json (
-    copy /Y user_settings_backup.json C:\StockTrader_Real\user_settings.json >nul
-    copy /Y user_settings_backup.json C:\StockTrader_Mock\user_settings.json >nul
+    copy /Y user_settings_backup.json C:\StockTrader\StockTrader_Real\user_settings.json >nul
+    copy /Y user_settings_backup.json C:\StockTrader\StockTrader_Mock\user_settings.json >nul
     del user_settings_backup.json >nul
     echo [복원] user_settings.json 양쪽 복원 완료
 )
@@ -64,7 +64,7 @@ if exist user_settings_backup.json (
 echo.
 echo ==============================
 echo  빌드 완료!
-echo  실전투자: C:\StockTrader_Real\StockTrader_Real.exe
-echo  모의투자: C:\StockTrader_Mock\StockTrader_Mock.exe
+echo  실전투자: C:\StockTrader\StockTrader_Real\StockTrader_Real.exe
+echo  모의투자: C:\StockTrader\StockTrader_Mock\StockTrader_Mock.exe
 echo ==============================
 pause
