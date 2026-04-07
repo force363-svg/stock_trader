@@ -981,20 +981,7 @@ class AIEngineThread(QThread):
                             try:
                                 data = scanner._fetch_data(code)
                                 sig  = generate_sell_signal(code, name, data, h)
-                                if sig:
-                                    closing_signals.append(sig)
-                                else:
-                                    # 매도 사유 없음 → 보유 신호
-                                    closing_signals.append({
-                                        "stock_code"  : code,
-                                        "stock_name"  : name,
-                                        "signal_type" : "HOLD",
-                                        "score"       : 0,
-                                        "current_price": 0,
-                                        "stop_loss"   : 0,
-                                        "target_price": 0,
-                                        "confidence"  : "MEDIUM",
-                                    })
+                                closing_signals.append(sig)
                             except Exception:
                                 pass
                         if closing_signals:
