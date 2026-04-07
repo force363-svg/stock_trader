@@ -698,6 +698,105 @@ class SettingsDialog(QDialog):
 
 
 # ─────────────────────────────────────────────
+#  AI 엔진 토글 스위치 위젯
+# ─────────────────────────────────────────────
+class AIToggleSwitch(QWidget):
+    toggled = pyqtSignal(bool)   # True=ON, False=OFF
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checked  = False
+        self._enabled  = True
+        self._stopping = False
+        self.setFixedSize(130, 32)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def isChecked(self):
+        return self._checked
+
+    def setChecked(self, val: bool):
+        self._checked  = val
+        self._stopping = False
+        self.setEnabled(True)
+        self.update()
+
+    def setStopping(self):
+        """정지 중 상태 (비활성)"""
+        self._stopping = True
+        self.setEnabled(False)
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self._enabled:
+            self._checked = not self._checked
+            self.update()
+            self.toggled.emit(self._checked)
+
+    def setEnabled(self, val: bool):
+        self._enabled = val
+        super().setEnabled(val)
+        self.update()
+
+    def paintEvent(self, event):
+        from PyQt5.QtGui import QPainter, QBrush, QPen, QColor, QFont
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        w, h = self.width(), self.height()
+        r = h // 2   # 반지름
+
+        # 배경 트랙
+        if self._stopping:
+            track_color = QColor("#636e72")
+        elif self._checked:
+            track_color = QColor("#00b894")
+        else:
+            track_color = QColor("#2d3436")
+
+        p.setBrush(QBrush(track_color))
+        p.setPen(QPen(QColor("#4a545a"), 1))
+        p.drawRoundedRect(0, 0, w, h, r, r)
+
+        # 슬라이더 원
+        circle_d = h - 6
+        if self._stopping:
+            cx = w // 2 - circle_d // 2   # 가운데
+            circle_color = QColor("#b2bec3")
+        elif self._checked:
+            cx = w - circle_d - 3          # 오른쪽
+            circle_color = QColor("#ffffff")
+        else:
+            cx = 3                          # 왼쪽
+            circle_color = QColor("#636e72")
+
+        p.setBrush(QBrush(circle_color))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(cx, 3, circle_d, circle_d)
+
+        # 텍스트
+        if self._stopping:
+            text = "정지 중..."
+            text_color = QColor("#dfe6e9")
+        elif self._checked:
+            text = "동작중"
+            text_color = QColor("#ffffff")
+        else:
+            text = "AI엔진"
+            text_color = QColor("#888888")
+
+        font = QFont("맑은 고딕", 9, QFont.Bold)
+        p.setFont(font)
+        p.setPen(QPen(text_color))
+        # 텍스트 위치: ON이면 왼쪽, OFF이면 오른쪽
+        if self._checked:
+            text_rect = self.rect().adjusted(8, 0, -(circle_d + 8), 0)
+        else:
+            text_rect = self.rect().adjusted(circle_d + 6, 0, -4, 0)
+        p.drawText(text_rect, Qt.AlignVCenter | Qt.AlignCenter, text)
+        p.end()
+
+
+# ─────────────────────────────────────────────
 #  API 초기 연결 스레드 (토큰 취득 → 첫 데이터 로드)
 #  창을 먼저 띄우고, 연결은 백그라운드에서 처리
 # ─────────────────────────────────────────────
@@ -1340,13 +1439,8 @@ class MainWindow(QMainWindow):
             layout.addWidget(self.btn_mock)
             layout.addWidget(self.btn_real)
 
-        self.btn_ai_engine = QPushButton("🤖 AI엔진  꺼짐")
-        self.btn_ai_engine.setStyleSheet(
-            "background-color: #2d3436; color: #636e72; "
-            "border: 1px solid #636e72; font-weight: bold; "
-            "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
-        )
-        self.btn_ai_engine.clicked.connect(self.toggle_ai_engine)
+        self.btn_ai_engine = AIToggleSwitch()
+        self.btn_ai_engine.toggled.connect(self._on_ai_toggle)
         layout.addWidget(self.btn_ai_engine)
 
         self.btn_start = QPushButton("🚀 자동매매 시작")
@@ -2147,57 +2241,49 @@ class MainWindow(QMainWindow):
             self.log_area.append(f"[{now}] ❌ 매수 실패: {name}")
 
     def _set_ai_btn_state(self, running: bool):
-        """AI 엔진 버튼 상태 즉시 반영"""
-        if running:
-            self.btn_ai_engine.setText("🤖 동작중 ●●●")
-            self.btn_ai_engine.setStyleSheet(
-                "background-color: #00b894; color: #fff; "
-                "border: none; font-weight: bold; "
-                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
-            )
-        else:
-            self.btn_ai_engine.setText("🤖 AI엔진  꺼짐")
-            self.btn_ai_engine.setStyleSheet(
-                "background-color: #2d3436; color: #636e72; "
-                "border: 1px solid #636e72; font-weight: bold; "
-                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
-            )
-        self.btn_ai_engine.setEnabled(True)
+        """토글 스위치 상태 반영"""
+        self.btn_ai_engine.setChecked(running)
 
-    # ── AI 엔진 시작/정지 ──
-    def toggle_ai_engine(self):
+    def _on_ai_toggle(self, checked: bool):
+        """토글 스위치 조작 → 시작/정지"""
+        if checked:
+            self._ai_engine_start()
+        else:
+            self._ai_engine_stop()
+
+    def _ai_engine_start(self):
         now = datetime.now().strftime("%H:%M:%S")
         if self.ai_thread and self.ai_thread.isRunning():
-            # ── 정지 요청 ──
-            self.btn_ai_engine.setEnabled(False)
-            self.btn_ai_engine.setText("🤖 정지 중...")
-            self.btn_ai_engine.setStyleSheet(
-                "background-color: #636e72; color: #dfe6e9; "
-                "border: none; font-weight: bold; "
-                "padding: 6px 14px; border-radius: 4px; font-size: 13px;"
-            )
-            self.ai_thread.stop()
-            self.log_area.append(f"[{now}] ⏸ AI 엔진 정지 요청")
-        else:
-            # ── 시작 ──
-            self.ai_thread = AIEngineThread(mode=self.trade_mode)
-            self.ai_thread.status_signal.connect(self._on_ai_status)
-            # finished는 한 번만 연결 (중복 방지)
-            self.ai_thread.finished.connect(self._on_ai_engine_stopped)
-            self.ai_thread.start()
-            self._set_ai_btn_state(True)
-            self.log_area.append(f"[{now}] ▶ AI 엔진 시작")
+            return
+        self.ai_thread = AIEngineThread(mode=self.trade_mode)
+        self.ai_thread.status_signal.connect(self._on_ai_status)
+        self.ai_thread.finished.connect(self._on_ai_engine_stopped)
+        self.ai_thread.start()
+        self.btn_ai_engine.setChecked(True)
+        self.log_area.append(f"[{now}] ▶ AI 엔진 시작")
+
+    def _ai_engine_stop(self):
+        now = datetime.now().strftime("%H:%M:%S")
+        if not self.ai_thread or not self.ai_thread.isRunning():
+            self.btn_ai_engine.setChecked(False)
+            return
+        self.btn_ai_engine.setStopping()
+        self.ai_thread.stop()
+        self.log_area.append(f"[{now}] ⏸ AI 엔진 정지 요청")
+
+    # 하위 호환용 (다른 곳에서 호출 시)
+    def toggle_ai_engine(self):
+        self._on_ai_toggle(not (self.ai_thread and self.ai_thread.isRunning()))
 
     def _on_ai_status(self, msg: str):
         """AI 엔진 상태 메시지 수신"""
         now = datetime.now().strftime("%H:%M:%S")
         self.log_area.append(f"[{now}] {msg}")
-        # 오류 발생 시 버튼 즉시 꺼짐 상태로 전환
         if "오류" in msg or "❌" in msg:
-            self._set_ai_btn_state(False)
+            self.btn_ai_engine.setChecked(False)
 
     def _on_ai_engine_stopped(self):
-        """AI 스레드 종료 → 버튼 꺼짐 상태 복원"""
+        """AI 스레드 종료 → 스위치 OFF"""
         if self.ai_thread:
             try:
                 self.ai_thread.finished.disconnect(self._on_ai_engine_stopped)
@@ -2205,7 +2291,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
         self.ai_thread = None
-        self._set_ai_btn_state(False)
+        self.btn_ai_engine.setChecked(False)
 
     # ── 자동매매 시작/정지 ──
     def toggle_trading(self):
