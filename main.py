@@ -841,16 +841,36 @@ class AIEngineThread(QThread):
 # ─────────────────────────────────────────────
 #  메인 윈도우
 # ─────────────────────────────────────────────
+def _detect_trade_mode() -> str:
+    """exe 이름으로 실전/모의 모드 자동 감지"""
+    exe_name = os.path.basename(sys.executable if getattr(sys, 'frozen', False) else "")
+    if "Mock" in exe_name or "mock" in exe_name:
+        return "mock"
+    if "Real" in exe_name or "real" in exe_name:
+        return "real"
+    # 개발 환경: config 우선
+    return None
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("주식 자동매매 시스템 v1.1")
         self.setMinimumSize(1280, 800)
         self.setStyleSheet(DARK_STYLE)
 
-        # API 초기화
+        # API 초기화 (exe 이름으로 모드 우선 감지)
         config = load_config()
-        self.trade_mode = config["api"].get("trade_mode", "real")
+        detected = _detect_trade_mode()
+        self.trade_mode = detected if detected else config["api"].get("trade_mode", "real")
+
+        # exe 감지 모드이면 config에도 저장 (일치 유지)
+        if detected and config["api"].get("trade_mode") != detected:
+            config["api"]["trade_mode"] = detected
+            save_config(config)
+
+        mode_label = "모의투자" if self.trade_mode == "mock" else "실전투자"
+        self.setWindowTitle(f"주식 자동매매 시스템 v1.1  [{mode_label}]")
+
         self.api = LSApi(mode=self.trade_mode)
         self.api_connected = False
         self.is_trading = False
@@ -1222,19 +1242,40 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(self.open_settings)
         layout.addWidget(self.btn_settings)
 
-        self.trade_mode = "real"
+        # 모드 버튼: exe 이름으로 감지된 경우 해당 버튼만 표시
+        detected_mode = _detect_trade_mode()
+        btn_style_mock = (
+            "QPushButton { padding: 2px 8px; font-size: 11px; "
+            "background-color: #0984e3; color: #fff; border: 1px solid #0984e3; border-radius: 3px; }"
+        )
+        btn_style_real = (
+            "QPushButton { padding: 2px 8px; font-size: 11px; "
+            "background-color: #d63031; color: #fff; border: 1px solid #d63031; border-radius: 3px; }"
+        )
+        btn_style_inactive = "padding: 2px 8px; font-size: 11px;"
+
         self.btn_mock = QPushButton("모의")
         self.btn_mock.setCheckable(True)
-        self.btn_mock.setStyleSheet("padding: 2px 8px; font-size: 11px;")
+        self.btn_mock.setChecked(self.trade_mode == "mock")
+        self.btn_mock.setStyleSheet(btn_style_mock if self.trade_mode == "mock" else btn_style_inactive)
         self.btn_mock.clicked.connect(lambda: self.switch_trade_mode("mock"))
-        layout.addWidget(self.btn_mock)
 
         self.btn_real = QPushButton("실전")
         self.btn_real.setCheckable(True)
-        self.btn_real.setChecked(True)
-        self.btn_real.setStyleSheet("padding: 2px 8px; font-size: 11px;")
+        self.btn_real.setChecked(self.trade_mode == "real")
+        self.btn_real.setStyleSheet(btn_style_real if self.trade_mode == "real" else btn_style_inactive)
         self.btn_real.clicked.connect(lambda: self.switch_trade_mode("real"))
-        layout.addWidget(self.btn_real)
+
+        if detected_mode == "mock":
+            # 모의 exe: 모의 버튼만 표시 (라벨 역할)
+            layout.addWidget(self.btn_mock)
+        elif detected_mode == "real":
+            # 실전 exe: 실전 버튼만 표시 (라벨 역할)
+            layout.addWidget(self.btn_real)
+        else:
+            # 개발 환경: 둘 다 표시 (전환 가능)
+            layout.addWidget(self.btn_mock)
+            layout.addWidget(self.btn_real)
 
         self.btn_stop = QPushButton("⏹ 정지")
         self.btn_stop.setObjectName("btn_stop")
