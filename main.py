@@ -752,9 +752,18 @@ class AIEngineThread(QThread):
             scanner    = Scanner(fetcher)
             last_scan  = 0
             last_learn = ""
-            SCAN_INTERVAL = 300   # 5분
 
-            self.status_signal.emit("[AI엔진] ✅ 준비 완료 - 장중 5분마다 스캔")
+            # scan_interval을 engine_config.json에서 읽기 (없으면 60초)
+            try:
+                import json as _json
+                _cfg_path = os.path.join(_root, "engine_config.json")
+                with open(_cfg_path, "r", encoding="utf-8") as _f:
+                    _cfg = _json.load(_f)
+                SCAN_INTERVAL = int(_cfg.get("scan_interval_seconds", 60))
+            except:
+                SCAN_INTERVAL = 60
+
+            self.status_signal.emit(f"[AI엔진] ✅ 준비 완료 - 장중 {SCAN_INTERVAL}초마다 스캔")
 
             while self._running:
                 import time

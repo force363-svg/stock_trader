@@ -4,6 +4,8 @@
     "buy": 80,
     "hold": 50
   },
+  "scan_interval_seconds": 60,
+  "max_scan_stocks": 2000,
   "screening": [
     {"enabled": true,  "name": "200일선 상승",       "description": "일봉 단순 200이평 상승추세 1회 이상"},
     {"enabled": true,  "name": "50일선 > 200일선",   "description": "일봉 단순 50이평 > 200이평 1봉 지속"},
