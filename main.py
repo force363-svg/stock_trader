@@ -1068,10 +1068,13 @@ class MainWindow(QMainWindow):
         self.api = LSApi(mode=self.trade_mode)
         self.api_connected = False
         self.is_trading = False
-        self.holdings_data  = []   # 보유종목 원본 데이터
-        self.ai_signals     = []   # AI 신호 캐시
-        self.ai_thread      = None # AI 엔진 스레드
-        self._fetch_thread  = None # 데이터 조회 스레드 (API 블로킹 방지)
+        self.holdings_data  = []
+        self.ai_signals     = []
+        self.ai_thread      = None
+        self._fetch_thread  = None
+        # startup.log 경로 공유 (디버그용)
+        _log_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
+        self._startup_log = os.path.join(_log_dir, "startup.log")
 
         self._api_init_thread = None   # API 초기 연결 스레드
 
@@ -1144,36 +1147,52 @@ class MainWindow(QMainWindow):
     def _on_fetch_done(self, result: dict):
         """백그라운드 조회 완료 → UI 업데이트 (메인 스레드에서 안전하게 실행)"""
         now = datetime.now().strftime("%H:%M:%S")
+        _slog = getattr(self, '_startup_log', None)
+        def _sl(msg):
+            if _slog:
+                try:
+                    with open(_slog, "a", encoding="utf-8") as f:
+                        f.write(f"{datetime.now().strftime('%H:%M:%S')} [fetch] {msg}\n")
+                except Exception:
+                    pass
 
+        _sl("시작")
         # 보유종목 + 계좌요약
         holdings = result.get("holdings", [])
         summary  = result.get("summary", {})
+        _sl(f"보유종목 {len(holdings)}개")
         if holdings is not None:
             self.holdings_data = holdings
+            _sl("holdings_table 업데이트 시작")
             self._update_holdings_table(holdings)
-            self._write_holdings_cache(holdings)   # AI 엔진에 보유종목 전달
+            _sl("holdings_table 완료")
+            self._write_holdings_cache(holdings)
         if summary:
             self._update_summary(summary)
+        _sl("summary 완료")
 
-        # 오류 로그
         if "error_holdings" in result:
             self.log_area.append(f"[{now}] ❌ 잔고 조회 실패: {result['error_holdings']}")
 
-        # 시장지수 (KOSPI/KOSDAQ)
+        _sl("market_index 시작")
         self._apply_market_index("KOSPI",  result.get("kospi"))
         self._apply_market_index("KOSDAQ", result.get("kosdaq"))
+        _sl("market_index 완료")
 
-        # 업종지수 차트
         sectors = result.get("sectors", [])
+        _sl(f"sector_table 시작 ({len(sectors)})")
         if sectors:
             self._apply_sector_table(sectors)
+        _sl("sector_table 완료")
 
-        # 상승테마
         themes = result.get("themes", [])
+        _sl(f"theme_section 시작 ({len(themes)})")
         if themes:
             self._update_theme_section(themes)
+        _sl("theme_section 완료")
 
         self.time_label.setText(f"⏱ {now} 업데이트")
+        _sl("완료")
 
 # ── AI 신호 파일 읽기 (10초마다) ──
     def _update_ai_signals(self):
