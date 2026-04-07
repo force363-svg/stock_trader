@@ -371,65 +371,66 @@ class LSApi:
     #  상승테마 조회 (t8425) - /stock/investinfo
     # ─────────────────────────────────────
     def get_themes(self):
-        """상승테마 조회 (t8425)
-        1차: /stock/investinfo (diff 포함 가능)
-        2차: /stock/sector (확실히 작동, tmname/tmcode)
-        diff 기준 내림차순 정렬
+        """상승테마 조회 (t1533 - 테마별시세조회)
+        t1533: 테마 전체의 diff(등락률)/avgdiff 한 번에 제공
+        gubun=0(전체), diff 기준 내림차순 정렬
+        엔드포인트: /stock/investinfo 시도 → /stock/sector 폴백
         """
         if not self.ensure_token():
             return []
 
-        def _parse(rows):
-            result = []
-            for r in rows:
-                name = r.get("tmname", "").strip()
-                if not name:
-                    continue
-                try:
-                    diff = float(r.get("diff", 0))
-                except:
-                    diff = 0.0
-                sign = "+" if diff >= 0 else ""
-                diff_str = f"{sign}{diff:.2f}%" if diff != 0 else "-"
-                result.append({
-                    "name": name,
-                    "code": r.get("tmcode", ""),
-                    "diff": diff,
-                    "diff_str": diff_str,
-                })
-            return result
-
-        # 1차: /stock/investinfo
-        for endpoint, body in [
-            ("/stock/investinfo", {"t8425InBlock": {"dummy": ""}}),
-            ("/stock/sector",     {"t8425InBlock": {"gubun": "0"}}),
-        ]:
+        endpoints = ["/stock/investinfo", "/stock/sector"]
+        for endpoint in endpoints:
             try:
+                body = {"t1533InBlock": {"gubun": "0"}}
                 res = requests.post(f"{self.base_url}{endpoint}",
-                                    headers=self._headers("t8425"),
+                                    headers=self._headers("t1533"),
                                     json=body, timeout=10)
-                print(f"[t8425] {endpoint} → HTTP {res.status_code}")
+                print(f"[t1533] {endpoint} → HTTP {res.status_code}")
                 if res.status_code != 200:
                     continue
                 raw = res.json()
-                print(f"[t8425] 응답키: {list(raw.keys())}")
-                rows = raw.get("t8425OutBlock", [])
+                rows = raw.get("t1533OutBlock", [])
                 if not rows:
-                    print(f"[t8425] 빈 응답, 다음 엔드포인트 시도")
+                    print(f"[t1533] {endpoint} 빈 응답: {list(raw.keys())}")
                     continue
-                # 첫 행 키 출력 (디버그)
                 first = rows[0] if isinstance(rows, list) else rows
-                print(f"[t8425] 첫행 키: {list(first.keys())}, diff={first.get('diff','없음')}")
-                result = _parse(rows if isinstance(rows, list) else [rows])
+                print(f"[t1533] 첫행 키: {list(first.keys())}")
+                result = []
+                for r in (rows if isinstance(rows, list) else [rows]):
+                    name = r.get("tmname", "").strip()
+                    if not name:
+                        continue
+                    try:
+                        diff = float(r.get("diff", r.get("avgdiff", 0)))
+                    except:
+                        diff = 0.0
+                    sign = "+" if diff >= 0 else ""
+                    result.append({
+                        "name":     name,
+                        "code":     r.get("tmcode", ""),
+                        "diff":     diff,
+                        "diff_str": f"{sign}{diff:.2f}%",
+                    })
                 result.sort(key=lambda x: x["diff"], reverse=True)
-                print(f"[LS API] ✅ 상승테마 {len(result)}개 ({endpoint})"
-                      + (f", 1위: {result[0]['name']} {result[0]['diff_str']}" if result else ""))
+                top = result[0] if result else None
+                print(f"[LS API] ✅ 상승테마 {len(result)}개"
+                      + (f", 1위: {top['name']} {top['diff_str']}" if top else ""))
                 return result
             except Exception as e:
-                print(f"[t8425] {endpoint} 오류: {e}")
+                print(f"[t1533] {endpoint} 오류: {e}")
 
-        print("[LS API] ❌ 상승테마 조회 실패 (모든 엔드포인트)")
-        return []
+        print("[LS API] ❌ t1533 실패 - t8425 폴백")
+        # t8425 폴백 (등락률 없이 이름만)
+        try:
+            res = requests.post(f"{self.base_url}/stock/sector",
+                                headers=self._headers("t8425"),
+                                json={"t8425InBlock": {"gubun": "0"}}, timeout=10)
+            rows = res.json().get("t8425OutBlock", [])
+            return [{"name": r.get("tmname","").strip(), "code": r.get("tmcode",""),
+                     "diff": 0.0, "diff_str": "-"} for r in rows if r.get("tmname")]
+        except:
+            return []
 
     # ─────────────────────────────────────
     #  테마별 종목 조회 (t1532)
