@@ -53,8 +53,9 @@ class LSApi:
             "appsecretkey" : self.app_secret,
             "scope"        : "oob"
         }
+        timeout = 5 if self.mode == "mock" else 10
         try:
-            res = requests.post(url, headers=headers, data=data, timeout=10)
+            res = requests.post(url, headers=headers, data=data, timeout=timeout)
             res.raise_for_status()
             result = res.json()
             self.access_token = result.get("access_token")
@@ -78,7 +79,7 @@ class LSApi:
             print(f"[LS API] ❌ {self.last_error}: {e}")
             return False
         except requests.exceptions.Timeout:
-            self.last_error = "LS 서버 응답 시간 초과 (10초)"
+            self.last_error = f"LS 서버 응답 시간 초과 - 포트 {'29443 차단됨' if self.mode == 'mock' else '8080'}"
             print(f"[LS API] ❌ {self.last_error}")
             return False
         except Exception as e:
