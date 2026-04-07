@@ -1333,10 +1333,6 @@ class MainWindow(QMainWindow):
             layout.addWidget(self.btn_mock)
             layout.addWidget(self.btn_real)
 
-        self.btn_stop = QPushButton("⏹ 정지")
-        self.btn_stop.setObjectName("btn_stop")
-        layout.addWidget(self.btn_stop)
-
         self.btn_ai_engine = QPushButton("🤖 AI엔진 시작")
         self.btn_ai_engine.setStyleSheet(
             "background-color: #6c5ce7; color: #fff; border: none; "
