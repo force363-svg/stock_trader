@@ -25,9 +25,15 @@ if exist C:\StockTrader\config.json (
     echo [백업] config.json 백업 완료
 )
 
-REM 빌드
-echo [빌드] 빌드 중...
-python -m PyInstaller 주식자동매매.spec --distpath C:\ -y 2>&1
+REM 빌드 캐시 삭제 후 새로 빌드
+echo [빌드] 캐시 삭제 후 빌드 중...
+if exist build rmdir /s /q build
+python -m PyInstaller 주식자동매매.spec --distpath C:\ -y --clean 2>&1
+if errorlevel 1 (
+    echo [오류] 빌드 실패!
+    pause
+    exit /b 1
+)
 
 REM config.json 복원
 if exist config_backup.json (
