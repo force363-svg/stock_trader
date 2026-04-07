@@ -2469,8 +2469,15 @@ class MainWindow(QMainWindow):
 #  실행 진입점
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    try:
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec_())
+    except Exception as _e:
+        import traceback
+        _log_path = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)), "crash.log")
+        with open(_log_path, "w", encoding="utf-8") as _f:
+            traceback.print_exc(file=_f)
+        raise
