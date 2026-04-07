@@ -150,24 +150,22 @@ def generate_sell_signal(code: str, name: str, data: dict,
     if ma_cond.get("score", 100) < 15:
         sell_reasons.append("이평선 역배열 전환")
 
-    if not sell_reasons:
-        return None
-
     daily = data.get("daily", [])
+    signal_type = "SELL" if sell_reasons else "HOLD"
     return {
         "stock_code"    : code,
         "stock_name"    : name,
-        "signal_type"   : "SELL",
+        "signal_type"   : signal_type,
         "score"         : score,
         "current_price" : current_price,
-        "sell_reason"   : " / ".join(sell_reasons),
+        "sell_reason"   : " / ".join(sell_reasons) if sell_reasons else "",
         "conditions"    : {
             k: {"score": v["score"], "detail": v["detail"]}
             for k, v in result["conditions"].items()
         },
-        "stop_loss"     : 0,
+        "stop_loss"     : _stop_loss(current_price) if signal_type == "SELL" else 0,
         "target_price"  : 0,
-        "confidence"    : "HIGH",
+        "confidence"    : "HIGH" if signal_type == "SELL" else "MEDIUM",
         "supply_score"  : result["supply_score"],
         "chart_score"   : result["chart_score"],
         "material_score": result["material_score"],

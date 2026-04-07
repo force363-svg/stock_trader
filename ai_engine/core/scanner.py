@@ -137,9 +137,11 @@ class Scanner:
                     hold_info=h,
                     market_status=None   # TODO: 시장 상태 주입 (향후 확장)
                 )
-                if sig:
-                    sell_signals.append(sig)
+                sell_signals.append(sig)
+                if sig["signal_type"] == "SELL":
                     print(f"[스캐너] 🔴 SELL: {name}({code}) 사유: {sig.get('sell_reason')}")
+                else:
+                    print(f"[스캐너] 🟡 HOLD: {name}({code}) {sig['score']:.1f}점")
                 time.sleep(0.05)
             except Exception as e:
                 print(f"[스캐너] SELL체크 오류 {code}: {e}")

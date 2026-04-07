@@ -35,7 +35,7 @@ REM ==============================
 echo.
 echo [빌드] 실전투자 (StockTrader_Real) 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 실전투자.spec --distpath C:\StockTrader -y --clean 2>&1
+python -m PyInstaller real.spec --distpath C:\StockTrader -y --clean 2>&1
 if errorlevel 1 (
     echo [오류] 실전투자 빌드 실패!
     pause
@@ -49,7 +49,7 @@ REM ==============================
 echo.
 echo [빌드] 모의투자 (StockTrader_Mock) 빌드 중...
 if exist build rmdir /s /q build
-python -m PyInstaller 모의투자.spec --distpath C:\StockTrader -y --clean 2>&1
+python -m PyInstaller mock.spec --distpath C:\StockTrader -y --clean 2>&1
 if errorlevel 1 (
     echo [오류] 모의투자 빌드 실패!
     pause
