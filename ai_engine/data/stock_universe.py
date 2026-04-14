@@ -57,17 +57,26 @@ class StockUniverse:
         self._last_update = 0
 
     def get_stocks(self, force_refresh=False) -> list:
-        """전체 종목 리스트 반환 (1시간 캐시)"""
+        """전체 종목 리스트 반환 (1시간 캐시, 실패 시 재시도)"""
+        import time as _time
         cache = get_cache()
         cached = cache.get("universe")
         if cached and not force_refresh:
             return cached
 
-        stocks = self.fetcher.get_stock_list()
-        if stocks:
-            cache.set("universe", stocks, ttl_seconds=3600)
-            self._stocks = stocks
-            print(f"[유니버스] {len(stocks)}종목 로드")
+        # 최대 3회 재시도
+        for attempt in range(3):
+            stocks = self.fetcher.get_stock_list()
+            if stocks:
+                cache.set("universe", stocks, ttl_seconds=3600)
+                self._stocks = stocks
+                print(f"[유니버스] {len(stocks)}종목 로드 (시도:{attempt+1})")
+                return self._stocks
+            print(f"[유니버스] ⚠ 종목 로드 실패 (시도:{attempt+1}/3)")
+            if attempt < 2:
+                _time.sleep(2)
+
+        print("[유니버스] ❌ 종목 로드 3회 실패")
         return self._stocks
 
     def size(self) -> int:

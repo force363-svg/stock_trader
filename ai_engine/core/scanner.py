@@ -1,56 +1,33 @@
 """
-전 종목 스캔 + 보유종목 SELL 신호 생성
-1. 종목 유니버스 로드
-2. 사전 스크리닝 (기술적 조건)
-3. 점수 계산 → BUY/HOLD 신호 생성
-4. 보유종목(holdings_cache.json) → SELL 신호 생성
+스캐너 — 창고(캐시)만 읽고 고려사항 점수로 평가
+
+AI는 API를 모른다. 창고에 데이터가 있으면 읽고, 없으면 대기.
+스캔 리스트 전체 종목 → 고려사항 점수 → 신호 생성.
 """
-import time
 import json
 import os
 import sys
 from datetime import datetime
 
-from ..data.stock_universe import StockUniverse, is_valid_stock
 from ..data.cache import get_cache
-from ..conditions.ma_alignment   import MAAlignmentCondition
-from ..conditions.macd           import MACDCondition
-from ..core.signal_generator     import generate_signal, generate_sell_signal
+from .signal_generator import generate_signal, generate_sell_signal
 
 
-# 스크리닝 조건 계산기 목록
-SCREENING_CONDITIONS = [
-    MAAlignmentCondition(),
-    MACDCondition(),
-]
+def _get_base_path():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-def _load_screening_cfg() -> list:
-    """engine_config.json screening 섹션 로드"""
-    try:
-        if getattr(sys, 'frozen', False):
-            base = os.path.dirname(os.path.dirname(sys.executable))
-        else:
-            base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        with open(os.path.join(base, "engine_config.json"), "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        return [c for c in cfg.get("screening", []) if c.get("enabled", True)]
-    except Exception:
-        return []
 
 
 def _load_holdings_cache() -> list:
-    """
-    GUI가 저장한 holdings_cache.json 읽기
-    반환: [{"code", "name", "buy_price", "qty"}, ...]
-    """
+    """보유종목 캐시 로드"""
     try:
+        base = _get_base_path()
         if getattr(sys, 'frozen', False):
-            base = os.path.dirname(os.path.dirname(sys.executable))
             exe_name = os.path.basename(sys.executable).lower()
             fname = "holdings_cache_mock.json" if "mock" in exe_name else "holdings_cache_real.json"
         else:
-            base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             fname = "holdings_cache.json"
         path = os.path.join(base, fname)
         if not os.path.exists(path):
@@ -61,141 +38,169 @@ def _load_holdings_cache() -> list:
         return []
 
 
+def _clean_code(code: str) -> str:
+    if code.startswith("A") and len(code) == 7:
+        return code[1:]
+    return code
+
+
 class Scanner:
-    def __init__(self, fetcher):
-        self.fetcher   = fetcher
-        self.universe  = StockUniverse(fetcher)
-        self._cache    = get_cache()
+    """
+    AI 스캐너 — 창고(캐시)만 읽는다. API 모른다.
 
-    def _fetch_data(self, code: str) -> dict:
-        """종목 데이터 조회 (캐시 활용)"""
-        cache_key = f"data_{code}"
-        cached = self._cache.get(cache_key)
-        if cached:
-            return cached
+    사용법:
+        scanner = Scanner()
+        scanner.set_filtered_stocks(stocks)  # 서버 종목 리스트 전달
+        signals, count = scanner.run_scan()  # 창고에서 읽고 평가
+    """
+    def __init__(self):
+        self._cache = get_cache()
+        self._filtered_stocks = None
 
-        daily  = self.fetcher.get_daily_ohlcv(code, count=250)
-        min60  = self.fetcher.get_minute_ohlcv(code, tick_range=60, count=100)
-        min15  = self.fetcher.get_minute_ohlcv(code, tick_range=15, count=100)
-        supply = self.fetcher.get_supply_demand(code, count=5)
-        price  = self.fetcher.get_price(code) or {}
+    def set_filtered_stocks(self, stocks: list):
+        """서버 조건검색 결과 전달 (수집기가 넣어줌)"""
+        self._filtered_stocks = stocks
+        print(f"[스캐너] 종목 설정: {len(stocks)}종목")
 
-        data = {
-            "daily" : daily,
-            "min60" : min60,
-            "min15" : min15,
-            "supply": supply,
-            "price" : price,
-        }
-        self._cache.set(cache_key, data, ttl_seconds=300)  # 5분 캐시
-        return data
-
-    def _passes_screening(self, code: str, data: dict) -> bool:
-        """사전 스크리닝 통과 여부"""
-        if not data.get("daily"):
-            return False
-
-        # 가격 범위 체크
-        price_data = data.get("price", {})
+    def _load_diff_filter(self):
+        """등락율 사전 필터 범위 로드 → (min, max) 또는 None"""
         try:
-            price = int(float(price_data.get("price", price_data.get("close", 0))))
-        except Exception:
-            price = 0
-        if not is_valid_stock(code, "", price):
-            return False
-
-        # 등락률 체크 (+2% ~ +7%)
-        try:
-            rate = float(price_data.get("diff", price_data.get("rate", 0)))
-            if not (2.0 <= rate <= 7.0):
-                return False
+            from ..conditions._config_helper import get_engine_config_path
+            import json as _json
+            path = get_engine_config_path()
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = _json.load(f)
+            df = cfg.get("scan_diff_filter", {})
+            if df.get("enabled", False):
+                return (float(df.get("min", 2.0)), float(df.get("max", 9.0)))
         except Exception:
             pass
+        return None
 
-        # 기술적 조건 (활성화된 것만)
-        for cond in SCREENING_CONDITIONS:
+    def run_scan(self) -> tuple:
+        """
+        스캔 실행 — 창고 데이터만 사용, 고려사항 점수로 평가.
+        Returns: (signals: list, scanned_count: int)
+        """
+        # 1. 보유종목 SELL 체크
+        held_stocks = _load_holdings_cache()
+        held_codes = {h["code"] for h in held_stocks}
+        sell_signals = self._scan_held_stocks(held_stocks)
+
+        # 2. 서버 종목 없으면 보유종목만
+        if not self._filtered_stocks:
+            print("[스캐너] 종목 없음")
+            return sell_signals, 0
+
+        # 3. 전체 종목 → 고려사항 점수 평가
+        stocks = list(self._filtered_stocks)
+        total = len(stocks)
+        buy_hold_signals = []
+        no_data_count = 0
+        dbg = [
+            f"=== 스캔 {datetime.now().strftime('%H:%M:%S')} ({total}종목) ===",
+        ]
+        detail_dbg = [
+            f"=== 상세 스캔 {datetime.now().strftime('%H:%M:%S')} ({total}종목) ===",
+        ]
+
+        # 등락율 필터 범위 로드
+        diff_filter = self._load_diff_filter()
+
+        for stock in stocks:
+            code = _clean_code(stock["code"])
+            name = stock["name"]
+
+            # 창고에서 읽기
+            cached = self._cache.get(f"data_{code}")
+            if not cached:
+                no_data_count += 1
+                if len(dbg) < 30:
+                    dbg.append(f"  {name}({code}): 데이터 대기중")
+                continue
+
+            # 등락율 사전 필터 (범위 밖이면 스킵)
+            if diff_filter:
+                try:
+                    pd = cached.get("price", {})
+                    dr = float(pd.get("diff", pd.get("rate", 0)))
+                    dmin, dmax = diff_filter
+                    if dr < dmin or dr > dmax:
+                        if len(dbg) < 30:
+                            dbg.append(f"  {name}({code}): 등락율 범위밖 ({dr:+.1f}%)")
+                        continue
+                except Exception:
+                    pass  # 데이터 파싱 실패 시 통과
+
+            # 고려사항 점수 계산 → 추천 여부 결정
             try:
-                if not cond.check_screening(code, data):
-                    return False
-            except Exception:
-                pass
+                sig = generate_signal(code, name, cached, server_filtered=True)
+                if sig:
+                    buy_hold_signals.append(sig)
+                    if len(dbg) < 30:
+                        dbg.append(f"  {name}({code}): {sig['signal_type']} {sig['score']:.1f}")
+                    # 고려사항 상세 로그
+                    conds = sig.get("conditions", {})
+                    for cname, cval in conds.items():
+                        sc = cval.get("score", 0)
+                        dt = cval.get("detail", "")
+                        wt = cval.get("weight", 0)
+                        detail_dbg.append(f"  [{name}({code})] 고려: {cname} = {sc:.0f}점 (w={wt}) {dt}")
+            except Exception as e:
+                if len(dbg) < 30:
+                    dbg.append(f"  {name}({code}): ⚠ {e}")
 
-        return True
+        buy_hold_signals.sort(key=lambda x: x["score"], reverse=True)
+        signals = sell_signals + buy_hold_signals
+
+        evaluated = len(buy_hold_signals)
+        dbg.append(f"=== 전체={total} 평가={evaluated} 데이터대기={no_data_count} ===")
+        print(f"[스캐너] {total}종목 → 평가:{evaluated} 데이터대기:{no_data_count}")
+        self._write_debug(dbg)
+        self._write_detail_debug(detail_dbg)
+
+        return signals, total
 
     def _scan_held_stocks(self, held_stocks: list) -> list:
-        """
-        보유종목 SELL 신호 체크 (스크리닝 없이 무조건 점수 계산)
-        매수 조건이 약해지거나 매도 조건 충족 시 SELL 반환
-        """
-        sell_signals = []
+        """보유종목 SELL 신호 체크"""
+        signals = []
         for h in held_stocks:
             code = h.get("code", "")
             name = h.get("name", "")
             if not code:
                 continue
             try:
-                data = self._fetch_data(code)
-                sig  = generate_sell_signal(
-                    code, name, data,
-                    hold_info=h,
-                    market_status=None   # TODO: 시장 상태 주입 (향후 확장)
-                )
-                sell_signals.append(sig)
-                if sig["signal_type"] == "SELL":
-                    print(f"[스캐너] 🔴 SELL: {name}({code}) 사유: {sig.get('sell_reason')}")
-                else:
-                    print(f"[스캐너] 🟡 HOLD: {name}({code}) {sig['score']:.1f}점")
-                time.sleep(0.05)
-            except Exception as e:
-                print(f"[스캐너] SELL체크 오류 {code}: {e}")
-        return sell_signals
-
-    def run_scan(self, max_stocks: int = 2000) -> tuple[list, int]:
-        """
-        전 종목 스캔 실행
-        반환: (signals 리스트, 스캔한 종목 수)
-        """
-        # ── 1. 보유종목 SELL 체크 (최우선) ──
-        held_stocks  = _load_holdings_cache()
-        held_codes   = {h["code"] for h in held_stocks}
-        sell_signals = self._scan_held_stocks(held_stocks)
-
-        # ── 2. 전 종목 BUY/HOLD 스캔 ──
-        stocks     = self.universe.get_stocks()
-        if not stocks:
-            print("[스캐너] 종목 리스트 없음")
-            # 보유종목 SELL 신호만이라도 반환
-            return sell_signals, 0
-
-        buy_hold_signals = []
-        scan_count = 0
-
-        for stock in stocks[:max_stocks]:
-            code = stock["code"]
-            name = stock["name"]
-
-            # 보유종목은 위에서 이미 SELL 처리 → BUY/HOLD 스캔 제외
-            if code in held_codes:
-                continue
-
-            scan_count += 1
-            try:
-                data = self._fetch_data(code)
-                if not self._passes_screening(code, data):
+                cached = self._cache.get(f"data_{_clean_code(code)}")
+                if not cached:
                     continue
-                sig = generate_signal(code, name, data)
-                if sig:
-                    buy_hold_signals.append(sig)
-                    print(f"[스캐너] ✅ {name}({code}) {sig['signal_type']} {sig['score']}점")
+                sig = generate_sell_signal(code, name, cached, hold_info=h)
+                signals.append(sig)
             except Exception as e:
-                print(f"[스캐너] {code} 오류: {e}")
+                print(f"[스캐너] SELL오류 {code}: {e}")
+        return signals
 
-            time.sleep(0.1)
+    def _write_debug(self, lines: list):
+        try:
+            path = os.path.join(_get_base_path(), "debug_scan.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+        except Exception:
+            pass
 
-        # ── 3. 합산 (SELL 먼저, 나머지 점수 내림차순) ──
-        buy_hold_signals.sort(key=lambda x: x["score"], reverse=True)
-        signals = sell_signals + buy_hold_signals
+    def _write_detail_debug(self, lines: list):
+        try:
+            path = os.path.join(_get_base_path(), "debug_screening.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+        except Exception:
+            pass
 
-        print(f"[스캐너] 완료 - {scan_count}종목 스캔 → "
-              f"매수/보유:{len(buy_hold_signals)} 매도:{len(sell_signals)}")
-        return signals, scan_count
+
+def _empty_signal(code, name, price=0):
+    return {
+        "stock_code": code, "stock_name": name,
+        "signal_type": "WATCH", "score": 0,
+        "current_price": price,
+        "conditions": {}, "confidence": "–",
+        "supply_score": 0, "chart_score": 0, "material_score": 0,
+    }

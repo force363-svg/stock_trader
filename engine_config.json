@@ -1,10 +1,50 @@
 {
   "version": "1.0",
-  "thresholds": {
-    "buy": 80,
-    "hold": 50
+  "primary_filter": {
+    "enabled": true,
+    "market": "0",
+    "price_min": 1000,
+    "price_max": 500000,
+    "min_volume_5d": 10000,
+    "min_amount_1d": 10,
+    "conditions": [
+      {"enabled": true, "name": "200일선 상승",       "description": "일봉 단순 200이평 상승추세"},
+      {"enabled": true, "name": "50일선 > 200일선",   "description": "일봉 단순 50이평 > 200이평"},
+      {"enabled": true, "name": "50일선 상승",         "description": "일봉 단순 50이평 상승추세"},
+      {"enabled": true, "name": "EMA20 > EMA50",      "description": "일봉 지수 20이평 > 지수 50이평"},
+      {"enabled": true, "name": "EMA5 > EMA20",       "description": "일봉 지수 5이평 > 지수 20이평"},
+      {"enabled": true, "name": "EMA5 상승",           "description": "일봉 지수 5이평 상승추세"}
+    ]
   },
-  "scan_interval_seconds": 60,
+  "defaults": {
+    "macd": [10, 20, 9],
+    "rsi_period": 14,
+    "bollinger_period": 20,
+    "bollinger_k": 2.0,
+    "supply_days": 5,
+    "box_period": 20,
+    "rebuy_cooldown_min": 30,
+    "penalty_points": {
+      "하락종목": 20,
+      "지수저점": 15,
+      "지수급락": 25,
+      "이평선이탈": 15,
+      "이격도": 10,
+      "거래량음봉": 10,
+      "거래량급감": 10,
+      "외인기관매도": 15,
+      "프로그램피크": 15,
+      "테마급락": 15,
+      "시간강화": 15
+    }
+  },
+  "thresholds": {
+    "buy": 75,
+    "hold": 35,
+    "sell_confirm": 75,
+    "sell_watch": 50
+  },
+  "scan_interval_seconds": 2,
   "max_scan_stocks": 2000,
   "screening": [
     {"enabled": true,  "name": "200일선 상승",       "description": "일봉 단순 200이평 상승추세 1회 이상"},
@@ -25,29 +65,26 @@
     {"enabled": false, "name": "15분 신고가",         "description": "3봉 이내 최고종가가 1봉 이내 발생"}
   ],
   "scoring": [
-    {"enabled": true,  "name": "수급_연속성",         "description": "최근 5일 중 순매수 발생 일수",              "weight": 30},
-    {"enabled": true,  "name": "당일_체결강도",       "description": "매수세 vs 매도세 비율 (100% 기준)",         "weight": 25},
-    {"enabled": true,  "name": "이평선_배열상태",     "description": "정배열/역배열/수렴",                        "weight": 20},
-    {"enabled": true,  "name": "지수_대비_강도(RS)",  "description": "코스피/코스닥 대비 초과 수익률",            "weight": 15},
-    {"enabled": true,  "name": "거래대금",            "description": "당일 거래대금 500억 돌파",                  "weight": 10},
-    {"enabled": true,  "name": "분봉배열",            "description": "3분봉 5선 위 + 거래량 동반 우상향",         "weight": 15},
-    {"enabled": true,  "name": "일봉배열",            "description": "5-20-60-120일선 정배열 초기 단계",          "weight": 20},
-    {"enabled": false, "name": "외인_기관_합산평단",  "description": "최근 10일간 추정 매집가, 현재가 괴리율",    "weight": 15},
-    {"enabled": false, "name": "프로그램_순유입",     "description": "장중 외국인 알고리즘 매수세 합계",          "weight": 10},
-    {"enabled": false, "name": "10년_패턴_유사도",   "description": "과거 급등주 패턴 일치 점수 (0~100)",        "weight": 10},
-    {"enabled": false, "name": "전고점_매물대",       "description": "현재가 위 5% 이내 저항 매물 존재 여부",     "weight": 10},
-    {"enabled": false, "name": "바닥권_이격도",       "description": "10년 역사적 저점 대비 현재가 위치",         "weight": 10},
-    {"enabled": false, "name": "섹터_자금유입",       "description": "해당 섹터 거래대금/거래량 순위",            "weight": 10},
-    {"enabled": false, "name": "뉴스_신선도",         "description": "키워드 6개월 내 첫 등장 여부",              "weight": 5},
-    {"enabled": false, "name": "재료_확장성",         "description": "단발성테마/실적직결/산업패러다임",          "weight": 10},
-    {"enabled": false, "name": "목표가_괴리율",       "description": "증권사 평균 목표가 vs 현재가 차이",         "weight": 10},
-    {"enabled": false, "name": "시장강세",            "description": "코스피/코스닥 하락 시에도 상승",            "weight": 10},
-    {"enabled": false, "name": "실시간수급",          "description": "장중 프로그램 매수 5만주 유입",             "weight": 10},
-    {"enabled": false, "name": "체결강도_120",        "description": "체결강도 120% (평소 대비 높음)",            "weight": 15},
-    {"enabled": false, "name": "신용잔고",            "description": "신용 비율 2% 미만 (매물 부담 낮음)",        "weight": 10},
-    {"enabled": false, "name": "지수대비_종목수",     "description": "상승종목 수 vs 하락종목 수 비율",           "weight": 10},
-    {"enabled": false, "name": "프로그램_속도",       "description": "순매수 5만주 + 순매수 속도 체크",           "weight": 10},
-    {"enabled": false, "name": "박스권_판단",         "description": "거래량 + 외인/기관 수급 감안 판단",         "weight": 10}
+    {"enabled": true, "name": "체결강도 100이상",  "description": "매수세가 매도세보다 우위일 때만 진입",      "weight": 25},
+    {"enabled": true, "name": "수급 2일 이상",     "description": "외인/기관 최소 2일 순매수 확인",            "weight": 20},
+    {"enabled": true, "name": "거래대금",           "description": "거래대금 충분한 종목만 진입",              "weight": 15},
+    {"enabled": true, "name": "RSI 70이하",         "description": "과매수 구간 진입 방지",                   "weight": 15},
+    {"enabled": true, "name": "볼린저",             "description": "볼린저밴드 상단 과열 체크",               "weight": 10},
+    {"enabled": true, "name": "상승테마 소속",      "description": "상승테마 상위 종목 소속 여부",             "weight": 20},
+    {"enabled": true, "name": "업종지수 상승",      "description": "해당 업종 지수 상승세 확인",              "weight": 15},
+    {"enabled": true, "name": "뉴스 긍정",           "description": "최근 뉴스 긍정 키워드 확인",              "weight": 15},
+    {"enabled": true, "name": "코스피 코스닥",      "description": "시장 지수 상승세 확인",                   "weight": 15},
+    {"enabled": true, "name": "전일대비 등락",      "description": "적정 상승폭 확인 (과도한 급등 회피)",      "weight": 10},
+    {"enabled": true, "name": "시가대비 등락",      "description": "장중 흐름 확인 (고점 추격매수 방지)",      "weight": 10},
+    {"enabled": true, "name": "20일선 지지",        "description": "현재가가 20일 이평선 위에서 지지 확인",    "weight": 15},
+    {"enabled": true, "name": "60일선 지지",        "description": "중기 추세선 지지 여부 확인",              "weight": 15},
+    {"enabled": true, "name": "박스권 상단 돌파",   "description": "20일 고점 돌파 시 매수 강화",             "weight": 15},
+    {"enabled": true, "name": "큰손 수급",          "description": "외인+기관+프로그램+기금 종합 세력 분석",   "weight": 15},
+    {"enabled": true, "name": "프로그램 매수",       "description": "기관 알고리즘 매매 동향 확인",             "weight": 10},
+    {"enabled": true, "name": "과거 유사패턴",      "description": "과거 매매 데이터 기반 베이지안 승률 예측 (AI 자동 블렌딩)", "weight": 15},
+    {"enabled": true, "name": "60분봉 유동주식 거래비중", "description": "60분봉 유동주식 대비 거래량 비중 확인", "weight": 50},
+    {"enabled": true, "name": "60분봉 1봉전 등락율",     "description": "60분봉 기준 1봉전 대비 등락율 상위 확인", "weight": 50},
+    {"enabled": true, "name": "일봉60봉 최고종가 돌파",  "description": "일봉 60봉 최고종가 + 거래량증가 + 등락율 확인", "weight": 50}
   ],
   "sell": [
     {"enabled": true,  "name": "프로그램매수 피크 -30%",   "description": "프로그램 순매수 피크 대비 30% 이상 이탈", "threshold": 30},
@@ -64,5 +101,20 @@
     {"enabled": false, "name": "오후 3시 이후 강화",       "description": "오후 3시 이후 매도 기준 강화",           "threshold": 15},
     {"enabled": false, "name": "변동성 큰 종목 40%",       "description": "변동성 큰 종목 이탈기준 40%로 조절",     "threshold": 40},
     {"enabled": false, "name": "대형주 이탈기준 20%",      "description": "무거운 대형 종목 이탈기준 20%",          "threshold": 20}
+  ],
+  "sell_scoring": [
+    {"enabled": true, "name": "체결강도 80이하",  "description": "매도세 전환 확인",                         "weight": 25},
+    {"enabled": true, "name": "수급",              "description": "외인/기관 이탈 강도 확인",                "weight": 20},
+    {"enabled": true, "name": "거래량",            "description": "거래량 감소 시 관심 이탈 판단",            "weight": 20},
+    {"enabled": true, "name": "손익률",            "description": "현재 수익/손실 구간 판단",                "weight": 20},
+    {"enabled": true, "name": "시장 지수",         "description": "시장 전반 급락 시 매도 강화",              "weight": 15},
+    {"enabled": true, "name": "테마 하락",          "description": "소속 테마 하락 전환 시 매도 강화",          "weight": 15},
+    {"enabled": true, "name": "업종 약세",          "description": "업종지수 하락 시 매도 강화",               "weight": 10},
+    {"enabled": true, "name": "뉴스 부정",          "description": "부정 뉴스 키워드 감지 시 매도 강화",        "weight": 15},
+    {"enabled": true, "name": "20일선 이탈",       "description": "20일 이평선 이탈 시 매도 경고",             "weight": 15},
+    {"enabled": true, "name": "60일선 이탈",       "description": "중기 지지선 붕괴 시 매도 강화",             "weight": 15},
+    {"enabled": true, "name": "박스권 하단 이탈",  "description": "20일 저점 이탈 시 매도 강화",               "weight": 15},
+    {"enabled": true, "name": "세력 이탈",         "description": "외인+기관+프로그램 동시 매도 시 매도 강화",  "weight": 15},
+    {"enabled": true, "name": "윗꼬리",           "description": "60분봉 장대 윗꼬리 감지 시 매도 강화",       "weight": 20}
   ]
 }

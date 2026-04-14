@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>매수 조건 정리</title>
+<style>
+  body { font-family: '맑은 고딕', sans-serif; background: #1a1a2e; color: #eee; margin: 20px; }
+  .container { display: flex; gap: 24px; }
+  .panel { flex: 1; background: #16213e; border-radius: 8px; padding: 16px; border: 1px solid #0f3460; }
+  h2 { text-align: center; color: #00b894; margin-top: 0; font-size: 16px; border-bottom: 2px solid #00b894; padding-bottom: 8px; }
+  h3 { color: #fdcb6e; font-size: 13px; margin: 14px 0 6px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #0f3460; color: #dfe6e9; padding: 6px 8px; text-align: left; border: 1px solid #2d3436; }
+  td { padding: 5px 8px; border: 1px solid #2d3436; }
+  tr:nth-child(even) { background: #1a1a3e; }
+  tr:nth-child(odd) { background: #16213e; }
+  .num { text-align: center; color: #74b9ff; font-weight: bold; }
+  .score { text-align: center; color: #00b894; font-weight: bold; }
+  .combo-table td { padding: 4px 8px; font-size: 12px; }
+  .combo-nums { color: #fdcb6e; font-weight: bold; }
+  .highlight { background: #0a3d62 !important; }
+  .section-divider { border-top: 1px dashed #555; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 왼쪽: 핵심 조건 + 조합표 -->
+  <div class="panel">
+    <h2>1단계: 핵심 조건 (기본점수)</h2>
+    <table>
+      <tr><th style="width:30px">#</th><th>조건명</th><th>설명</th></tr>
+      <tr><td class="num">1</td><td>전일대비 등락</td><td>+2~5% 고점수, +7% 감점, +9% 매수주의</td></tr>
+      <tr><td class="num">2</td><td>시가대비 등락</td><td>+2~5% 고점수, +7% 감점, +9% 매수주의</td></tr>
+      <tr class="highlight"><td class="num">3</td><td>유동주식 비율 거래량</td><td>60분 유동주식 대비 거래량 비율, 높을수록 가점</td></tr>
+      <tr class="highlight"><td class="num">4</td><td>유동주식 비율</td><td>60분봉 유동주식 대비 거래량 0.5%이상</td></tr>
+      <tr class="highlight"><td class="num">5</td><td>유동주식 변동</td><td>60분봉 2봉평균 대비 거래량변동율 90%이상</td></tr>
+      <tr class="highlight"><td class="num">6</td><td>60분봉 등락율</td><td>60분봉 3~6% 가점</td></tr>
+      <tr class="highlight"><td class="num">7</td><td>15분봉 등락율</td><td>15분봉 3~6% 가점</td></tr>
+    </table>
+
+    <h3>3~7번 동시 충족 조합 → 기본점수</h3>
+    <table class="combo-table">
+      <tr><th>조합</th><th style="width:80px">점수</th></tr>
+      <tr><td class="combo-nums">3, 4, 5, 6, 7</td><td class="score">90점</td></tr>
+      <tr><td class="combo-nums">3, 4, 5, 6</td><td class="score">87점</td></tr>
+      <tr><td class="combo-nums">3, 4, 5, 6</td><td class="score">85점</td></tr>
+      <tr><td class="combo-nums">4, 5, 6</td><td class="score">85점</td></tr>
+      <tr><td class="combo-nums">3, 4, 5, 7</td><td class="score">80점</td></tr>
+      <tr><td class="combo-nums">4, 5, 7</td><td class="score">80점</td></tr>
+      <tr><td class="combo-nums">3, 4, 6</td><td class="score">80점</td></tr>
+      <tr><td class="combo-nums">3, 4, 6, 7</td><td class="score">83점</td></tr>
+    </table>
+    <p style="font-size:11px; color:#b2bec3; margin-top:8px;">※ 1,2번(등락율)은 필터/감점 역할 &nbsp;|&nbsp; 3~7번 조합이 기본점수 결정</p>
+  </div>
+
+  <!-- 오른쪽: 고려사항 가점 -->
+  <div class="panel">
+    <h2>2단계: 고려사항 (추가 가점)</h2>
+    <table>
+      <tr><th>조건명</th><th>설명</th><th style="width:50px">가점</th></tr>
+      <tr><td>최고종가</td><td>일봉 60봉 최고종가</td><td class="score">+30</td></tr>
+      <tr><td>최고종가후 조정</td><td>1봉전 기준 60봉 이내 최고종가가 4봉이내 발생</td><td class="score">+30</td></tr>
+      <tr><td>스퀴즈</td><td>이평선밀집</td><td class="score">+30</td></tr>
+      <tr><td>최고종가</td><td>20봉 최고종가</td><td class="score">+20</td></tr>
+      <tr><td>큰손 수급</td><td>외인+기관+프로그램+기금 종합 세력 분석</td><td class="score">+20</td></tr>
+      <tr><td>과거패턴분석</td><td>과거 매매 데이터 기반 AI 승률 예측 (자동 블렌딩)</td><td class="score">+20</td></tr>
+      <tr><td>상승테마 소속</td><td>상승테마 상위 종목에 포함</td><td class="score">+15</td></tr>
+      <tr><td>업종지수 상승</td><td>해당 업종 지수 상승 종목에 포함</td><td class="score">+15</td></tr>
+      <tr><td>RSI 70이하</td><td>과매수 구간 진입 방지</td><td class="score">+10</td></tr>
+      <tr><td>체결강도</td><td>90 이상</td><td class="score">+10</td></tr>
+      <tr><td>매집 동향</td><td>10~15일간 큰손 매수비중 증가 추세</td><td class="score">+5</td></tr>
+      <tr><td>볼린저</td><td>볼린저밴드 상단 과열 체크</td><td class="score">+5</td></tr>
+      <tr><td>코스피 코스닥</td><td>시장 지수 상승세 확인</td><td class="score">+3</td></tr>
+      <tr><td>뉴스 긍정</td><td>최근 뉴스 긍정 키워드 확인</td><td class="score">+3</td></tr>
+    </table>
+    <div class="section-divider"></div>
+    <p style="font-size:11px; color:#b2bec3;">
+      가점 합계: 최대 +186점<br>
+      최종 점수 = 기본점수(80~90) + 해당 가점 합산 (cap 100)
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

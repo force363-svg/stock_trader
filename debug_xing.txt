@@ -1,0 +1,10 @@
+[17:20:06] === xingAPI 로그인 시작 ===
+[17:20:06] CoInitialize 시작
+[17:20:06] CoInitialize 완료
+[17:20:06] XA_Session 생성 시작
+[17:20:06] XA_Session 생성 완료
+[17:20:06] ConnectServer: demo.ls-sec.co.kr:20001
+[17:20:06] ConnectServer 완료
+[17:20:06] Login 호출: user=kdw0924, mode=mock
+[17:20:07] Login 결과: ok=False, msg=모의투자 비밀번호 오류입니다.                                                   
+[17:20:07] 로그인 실패: 모의투자 비밀번호 오류입니다.                                                   

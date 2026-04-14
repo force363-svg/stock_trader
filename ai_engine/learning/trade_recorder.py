@@ -9,20 +9,36 @@ from ..db.database import get_connection
 class TradeRecorder:
     def record_buy(self, code: str, name: str, buy_price: int,
                    qty: int, signal_score: float, conditions: dict):
-        """매수 체결 기록"""
+        """매수 체결 기록 (시장 상황 포함)"""
         conn = get_connection()
         try:
+            # 시장 상황 기록
+            market_regime = ""
+            try:
+                from .strategy_manager import classify_market
+                market_regime = classify_market().get("regime", "")
+            except Exception:
+                pass
+
+            # market_regime 컬럼 없으면 추가
+            try:
+                conn.execute("ALTER TABLE trade_results ADD COLUMN market_regime TEXT")
+            except Exception:
+                pass
+
             conn.execute("""
                 INSERT INTO trade_results
-                    (code, name, buy_date, buy_price, qty, signal_score, conditions, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (code, name, buy_date, buy_price, qty, signal_score, conditions,
+                     market_regime, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (code, name,
                   datetime.now().strftime("%Y%m%d"),
                   buy_price, qty, signal_score,
                   json.dumps(conditions, ensure_ascii=False),
+                  market_regime,
                   datetime.now().isoformat()))
             conn.commit()
-            print(f"[기록] 매수 기록: {name}({code}) {buy_price:,}원 x{qty}주")
+            print(f"[기록] 매수 기록: {name}({code}) {buy_price:,}원 x{qty}주 [{market_regime}]")
         finally:
             conn.close()
 

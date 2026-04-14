@@ -13,7 +13,7 @@ def get_signals_path():
         exe_name = os.path.basename(sys.executable).lower()
         fname = "ai_signals_mock.json" if "mock" in exe_name else "ai_signals_real.json"
     else:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         fname = "ai_signals.json"
     return os.path.join(base, fname)
 

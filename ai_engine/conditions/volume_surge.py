@@ -30,7 +30,28 @@ class VolumeSurgeCondition(BaseCondition):
                         pts += 20
                     details.append(f"60분봉 거래량 {ratio:.0f}%")
 
-        # 당일 거래대금 500억 체크
+        # 당일 거래량 vs 전일 거래량 (t1102 price 데이터)
+        if not min60:
+            try:
+                vol_today = int(float(price_data.get("volume", 0)))
+                vol_prev  = int(float(price_data.get("jnilvolume", 0)))
+                if vol_prev > 0 and vol_today > 0:
+                    vol_ratio = (vol_today / vol_prev) * 100
+                    if vol_ratio >= 200:
+                        pts += 40
+                        details.append(f"당일거래량 전일대비 {vol_ratio:.0f}%")
+                    elif vol_ratio >= 120:
+                        pts += 20
+                        details.append(f"당일거래량 전일대비 {vol_ratio:.0f}%")
+                    elif vol_ratio >= 80:
+                        pts += 10
+                        details.append(f"당일거래량 전일대비 {vol_ratio:.0f}%")
+                    else:
+                        details.append(f"거래량 감소 {vol_ratio:.0f}%")
+            except:
+                pass
+
+        # 당일 거래대금 체크
         try:
             amount = int(float(price_data.get("value", price_data.get("tramt", 0))))
             if amount >= 50_000_000_000:  # 500억
@@ -38,6 +59,9 @@ class VolumeSurgeCondition(BaseCondition):
                 details.append(f"거래대금 {amount//100_000_000}억")
             elif amount >= 20_000_000_000:  # 200억
                 pts += 25
+                details.append(f"거래대금 {amount//100_000_000}억")
+            elif amount >= 5_000_000_000:  # 50억
+                pts += 10
                 details.append(f"거래대금 {amount//100_000_000}억")
         except:
             pass

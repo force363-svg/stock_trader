@@ -12,6 +12,7 @@ a = Analysis(
     datas=[
         ('ai_engine',         'ai_engine'),
         ('engine_config.json', '.'),
+        ('icon_mock.ico',      '.'),
     ] + np_d + pd_d,
     hiddenimports=[
         'requests', 'urllib3', 'charset_normalizer', 'certifi', 'idna',
@@ -42,6 +43,7 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
+    icon='icon_mock.ico',
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

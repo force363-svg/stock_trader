@@ -79,4 +79,33 @@ CREATE TABLE IF NOT EXISTS condition_config (
     updated_at   TEXT,
     UNIQUE(group_name, condition)
 );
+
+CREATE TABLE IF NOT EXISTS historical_ohlcv (
+    code         TEXT NOT NULL,
+    date         TEXT NOT NULL,
+    open         INTEGER,
+    high         INTEGER,
+    low          INTEGER,
+    close        INTEGER,
+    volume       INTEGER,
+    amount       INTEGER,        -- 거래대금
+    market_cap   INTEGER,        -- 시가총액
+    shares       INTEGER,        -- 상장주식수
+    source       TEXT,           -- KRX / LS / MANUAL
+    created_at   TEXT,
+    PRIMARY KEY (code, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hist_date ON historical_ohlcv(date);
+CREATE INDEX IF NOT EXISTS idx_hist_code ON historical_ohlcv(code);
+
+CREATE TABLE IF NOT EXISTS data_collect_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    source       TEXT NOT NULL,  -- KRX / LS
+    collect_date TEXT NOT NULL,  -- 수집 대상 날짜
+    stock_count  INTEGER,        -- 수집 종목 수
+    status       TEXT,           -- OK / FAIL / PARTIAL
+    message      TEXT,
+    created_at   TEXT
+);
 """

@@ -1,0 +1,627 @@
+{
+  "updated": "2026-04-11 15:37:02",
+  "mode": "mock",
+  "count": 62,
+  "stocks": [
+    {
+      "code": "001780",
+      "name": "알루코",
+      "price": 2590,
+      "sign": "2",
+      "change": 85,
+      "diff": 3.39,
+      "volume": 3575660,
+      "job_flag": "N"
+    },
+    {
+      "code": "001820",
+      "name": "삼화콘덴서",
+      "price": 63100,
+      "sign": "2",
+      "change": 4700,
+      "diff": 8.05,
+      "volume": 683411,
+      "job_flag": "N"
+    },
+    {
+      "code": "003010",
+      "name": "혜인",
+      "price": 6050,
+      "sign": "2",
+      "change": 100,
+      "diff": 1.68,
+      "volume": 202883,
+      "job_flag": "N"
+    },
+    {
+      "code": "004960",
+      "name": "한신공영",
+      "price": 16630,
+      "sign": "2",
+      "change": 560,
+      "diff": 3.48,
+      "volume": 402693,
+      "job_flag": "N"
+    },
+    {
+      "code": "005690",
+      "name": "파미셀",
+      "price": 16740,
+      "sign": "5",
+      "change": 300,
+      "diff": -1.76,
+      "volume": 829966,
+      "job_flag": "N"
+    },
+    {
+      "code": "005880",
+      "name": "대한해운",
+      "price": 3090,
+      "sign": "1",
+      "change": 710,
+      "diff": 29.83,
+      "volume": 157068637,
+      "job_flag": "N"
+    },
+    {
+      "code": "005960",
+      "name": "동부건설",
+      "price": 9290,
+      "sign": "2",
+      "change": 40,
+      "diff": 0.43,
+      "volume": 340398,
+      "job_flag": "N"
+    },
+    {
+      "code": "006110",
+      "name": "삼아알미늄",
+      "price": 55200,
+      "sign": "2",
+      "change": 6200,
+      "diff": 12.65,
+      "volume": 1432093,
+      "job_flag": "N"
+    },
+    {
+      "code": "008350",
+      "name": "남선알미늄",
+      "price": 2205,
+      "sign": "2",
+      "change": 40,
+      "diff": 1.85,
+      "volume": 45377136,
+      "job_flag": "N"
+    },
+    {
+      "code": "009180",
+      "name": "한솔로지스틱스",
+      "price": 3210,
+      "sign": "2",
+      "change": 175,
+      "diff": 5.77,
+      "volume": 460353,
+      "job_flag": "N"
+    },
+    {
+      "code": "010820",
+      "name": "퍼스텍",
+      "price": 11390,
+      "sign": "2",
+      "change": 1620,
+      "diff": 16.58,
+      "volume": 30887038,
+      "job_flag": "N"
+    },
+    {
+      "code": "011280",
+      "name": "태림포장",
+      "price": 2150,
+      "sign": "2",
+      "change": 135,
+      "diff": 6.7,
+      "volume": 816450,
+      "job_flag": "N"
+    },
+    {
+      "code": "013580",
+      "name": "계룡건설",
+      "price": 27400,
+      "sign": "2",
+      "change": 1050,
+      "diff": 3.98,
+      "volume": 224106,
+      "job_flag": "N"
+    },
+    {
+      "code": "020710",
+      "name": "시공테크",
+      "price": 4585,
+      "sign": "2",
+      "change": 555,
+      "diff": 13.77,
+      "volume": 2376795,
+      "job_flag": "N"
+    },
+    {
+      "code": "027710",
+      "name": "팜스토리",
+      "price": 1420,
+      "sign": "2",
+      "change": 47,
+      "diff": 3.42,
+      "volume": 2081606,
+      "job_flag": "N"
+    },
+    {
+      "code": "031330",
+      "name": "에스에이엠티",
+      "price": 6370,
+      "sign": "2",
+      "change": 640,
+      "diff": 11.17,
+      "volume": 2087766,
+      "job_flag": "N"
+    },
+    {
+      "code": "033790",
+      "name": "피노",
+      "price": 10690,
+      "sign": "2",
+      "change": 630,
+      "diff": 6.26,
+      "volume": 9075735,
+      "job_flag": "N"
+    },
+    {
+      "code": "042110",
+      "name": "에스씨디",
+      "price": 1508,
+      "sign": "2",
+      "change": 37,
+      "diff": 2.52,
+      "volume": 590919,
+      "job_flag": "N"
+    },
+    {
+      "code": "044450",
+      "name": "KSS해운",
+      "price": 12640,
+      "sign": "2",
+      "change": 1190,
+      "diff": 10.39,
+      "volume": 10301897,
+      "job_flag": "N"
+    },
+    {
+      "code": "047400",
+      "name": "유니온머티리얼",
+      "price": 1642,
+      "sign": "2",
+      "change": 44,
+      "diff": 2.75,
+      "volume": 645700,
+      "job_flag": "N"
+    },
+    {
+      "code": "049520",
+      "name": "유아이엘",
+      "price": 4230,
+      "sign": "2",
+      "change": 60,
+      "diff": 1.44,
+      "volume": 238378,
+      "job_flag": "N"
+    },
+    {
+      "code": "052460",
+      "name": "아이크래프트",
+      "price": 3765,
+      "sign": "2",
+      "change": 180,
+      "diff": 5.02,
+      "volume": 225563,
+      "job_flag": "N"
+    },
+    {
+      "code": "052710",
+      "name": "아모텍",
+      "price": 19700,
+      "sign": "2",
+      "change": 3490,
+      "diff": 21.53,
+      "volume": 2228887,
+      "job_flag": "N"
+    },
+    {
+      "code": "053690",
+      "name": "한미글로벌",
+      "price": 33150,
+      "sign": "2",
+      "change": 2450,
+      "diff": 7.98,
+      "volume": 1214701,
+      "job_flag": "N"
+    },
+    {
+      "code": "054090",
+      "name": "삼진엘앤디",
+      "price": 1056,
+      "sign": "5",
+      "change": 20,
+      "diff": -1.86,
+      "volume": 457250,
+      "job_flag": "N"
+    },
+    {
+      "code": "054930",
+      "name": "유신",
+      "price": 27550,
+      "sign": "2",
+      "change": 1750,
+      "diff": 6.78,
+      "volume": 117859,
+      "job_flag": "N"
+    },
+    {
+      "code": "056360",
+      "name": "코위버",
+      "price": 10280,
+      "sign": "2",
+      "change": 850,
+      "diff": 9.01,
+      "volume": 5601824,
+      "job_flag": "N"
+    },
+    {
+      "code": "058730",
+      "name": "다스코",
+      "price": 3855,
+      "sign": "2",
+      "change": 10,
+      "diff": 0.26,
+      "volume": 376182,
+      "job_flag": "N"
+    },
+    {
+      "code": "063760",
+      "name": "이엘피",
+      "price": 3370,
+      "sign": "5",
+      "change": 95,
+      "diff": -2.74,
+      "volume": 275199,
+      "job_flag": "N"
+    },
+    {
+      "code": "064290",
+      "name": "인텍플러스",
+      "price": 24500,
+      "sign": "2",
+      "change": 2050,
+      "diff": 9.13,
+      "volume": 648792,
+      "job_flag": "N"
+    },
+    {
+      "code": "069730",
+      "name": "DSR제강",
+      "price": 5300,
+      "sign": "2",
+      "change": 90,
+      "diff": 1.73,
+      "volume": 144255,
+      "job_flag": "N"
+    },
+    {
+      "code": "070300",
+      "name": "엑스큐어",
+      "price": 2205,
+      "sign": "2",
+      "change": 303,
+      "diff": 15.93,
+      "volume": 1234093,
+      "job_flag": "N"
+    },
+    {
+      "code": "081580",
+      "name": "성우전자",
+      "price": 3205,
+      "sign": "2",
+      "change": 165,
+      "diff": 5.43,
+      "volume": 143231,
+      "job_flag": "N"
+    },
+    {
+      "code": "083470",
+      "name": "이엠앤아이",
+      "price": 1431,
+      "sign": "2",
+      "change": 137,
+      "diff": 10.59,
+      "volume": 546072,
+      "job_flag": "N"
+    },
+    {
+      "code": "084680",
+      "name": "이월드",
+      "price": 1823,
+      "sign": "2",
+      "change": 86,
+      "diff": 4.95,
+      "volume": 12216940,
+      "job_flag": "N"
+    },
+    {
+      "code": "086670",
+      "name": "비엠티",
+      "price": 15240,
+      "sign": "2",
+      "change": 340,
+      "diff": 2.28,
+      "volume": 194186,
+      "job_flag": "N"
+    },
+    {
+      "code": "092600",
+      "name": "앤씨앤",
+      "price": 1499,
+      "sign": "2",
+      "change": 68,
+      "diff": 4.75,
+      "volume": 6136694,
+      "job_flag": "N"
+    },
+    {
+      "code": "094970",
+      "name": "제이엠티",
+      "price": 3540,
+      "sign": "2",
+      "change": 110,
+      "diff": 3.21,
+      "volume": 440085,
+      "job_flag": "N"
+    },
+    {
+      "code": "095270",
+      "name": "웨이브일렉트로",
+      "price": 7810,
+      "sign": "1",
+      "change": 1800,
+      "diff": 29.95,
+      "volume": 2680286,
+      "job_flag": "N"
+    },
+    {
+      "code": "095910",
+      "name": "에스에너지",
+      "price": 1995,
+      "sign": "2",
+      "change": 137,
+      "diff": 7.37,
+      "volume": 5894107,
+      "job_flag": "N"
+    },
+    {
+      "code": "099220",
+      "name": "SDN",
+      "price": 1344,
+      "sign": "2",
+      "change": 80,
+      "diff": 6.33,
+      "volume": 1721944,
+      "job_flag": "N"
+    },
+    {
+      "code": "100840",
+      "name": "SNT에너지",
+      "price": 62200,
+      "sign": "2",
+      "change": 4200,
+      "diff": 7.24,
+      "volume": 748642,
+      "job_flag": "N"
+    },
+    {
+      "code": "109070",
+      "name": "주성코퍼레이션",
+      "price": 1368,
+      "sign": "2",
+      "change": 148,
+      "diff": 12.13,
+      "volume": 4282044,
+      "job_flag": "N"
+    },
+    {
+      "code": "109080",
+      "name": "옵티시스",
+      "price": 17690,
+      "sign": "2",
+      "change": 1690,
+      "diff": 10.56,
+      "volume": 1993883,
+      "job_flag": "N"
+    },
+    {
+      "code": "128660",
+      "name": "피제이메탈",
+      "price": 3545,
+      "sign": "2",
+      "change": 100,
+      "diff": 2.9,
+      "volume": 306660,
+      "job_flag": "N"
+    },
+    {
+      "code": "149950",
+      "name": "아바텍",
+      "price": 11390,
+      "sign": "2",
+      "change": 1580,
+      "diff": 16.11,
+      "volume": 248621,
+      "job_flag": "N"
+    },
+    {
+      "code": "159010",
+      "name": "아스플로",
+      "price": 6660,
+      "sign": "2",
+      "change": 520,
+      "diff": 8.47,
+      "volume": 145755,
+      "job_flag": "N"
+    },
+    {
+      "code": "173130",
+      "name": "오파스넷",
+      "price": 7950,
+      "sign": "2",
+      "change": 540,
+      "diff": 7.29,
+      "volume": 320886,
+      "job_flag": "N"
+    },
+    {
+      "code": "187870",
+      "name": "디바이스",
+      "price": 27700,
+      "sign": "2",
+      "change": 2050,
+      "diff": 7.99,
+      "volume": 644340,
+      "job_flag": "N"
+    },
+    {
+      "code": "217730",
+      "name": "강스템바이오텍",
+      "price": 3600,
+      "sign": "2",
+      "change": 400,
+      "diff": 12.5,
+      "volume": 3272285,
+      "job_flag": "N"
+    },
+    {
+      "code": "243840",
+      "name": "신흥에스이씨",
+      "price": 8170,
+      "sign": "2",
+      "change": 190,
+      "diff": 2.38,
+      "volume": 436671,
+      "job_flag": "N"
+    },
+    {
+      "code": "251370",
+      "name": "와이엠티",
+      "price": 16710,
+      "sign": "2",
+      "change": 230,
+      "diff": 1.4,
+      "volume": 272526,
+      "job_flag": "N"
+    },
+    {
+      "code": "263020",
+      "name": "디케이앤디",
+      "price": 3270,
+      "sign": "2",
+      "change": 130,
+      "diff": 4.14,
+      "volume": 237902,
+      "job_flag": "N"
+    },
+    {
+      "code": "264450",
+      "name": "유비쿼스",
+      "price": 16200,
+      "sign": "2",
+      "change": 990,
+      "diff": 6.51,
+      "volume": 517361,
+      "job_flag": "N"
+    },
+    {
+      "code": "290550",
+      "name": "디케이티",
+      "price": 19340,
+      "sign": "2",
+      "change": 1040,
+      "diff": 5.68,
+      "volume": 384621,
+      "job_flag": "N"
+    },
+    {
+      "code": "307930",
+      "name": "컴퍼니케이",
+      "price": 8370,
+      "sign": "2",
+      "change": 400,
+      "diff": 5.02,
+      "volume": 634999,
+      "job_flag": "N"
+    },
+    {
+      "code": "327260",
+      "name": "RF머트리얼즈",
+      "price": 92700,
+      "sign": "2",
+      "change": 17000,
+      "diff": 22.46,
+      "volume": 732426,
+      "job_flag": "N"
+    },
+    {
+      "code": "332290",
+      "name": "누보",
+      "price": 1416,
+      "sign": "2",
+      "change": 36,
+      "diff": 2.61,
+      "volume": 1304545,
+      "job_flag": "N"
+    },
+    {
+      "code": "382800",
+      "name": "지앤비에스 에코",
+      "price": 7090,
+      "sign": "2",
+      "change": 1060,
+      "diff": 17.58,
+      "volume": 2992391,
+      "job_flag": "N"
+    },
+    {
+      "code": "393890",
+      "name": "더블유씨피",
+      "price": 16820,
+      "sign": "2",
+      "change": 610,
+      "diff": 3.76,
+      "volume": 1906898,
+      "job_flag": "N"
+    },
+    {
+      "code": "396270",
+      "name": "넥스트칩",
+      "price": 4515,
+      "sign": "2",
+      "change": 600,
+      "diff": 15.33,
+      "volume": 2641179,
+      "job_flag": "N"
+    },
+    {
+      "code": "424760",
+      "name": "벨로크",
+      "price": 1369,
+      "sign": "2",
+      "change": 76,
+      "diff": 5.88,
+      "volume": 261904,
+      "job_flag": "N"
+    }
+  ]
+}

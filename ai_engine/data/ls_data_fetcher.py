@@ -38,5 +38,25 @@ class LSDataFetcher:
     def get_price(self, code: str) -> dict:
         return self.api.get_price(code) or {}
 
+    def get_financial(self, code: str) -> dict:
+        # t3320: PER/PBR/ROE/ROA/EPS/BPS
+        result = self.api.get_financial(code) or {}
+        # t3341: 영업이익증가율, 유보율 (재무순위종합)
+        try:
+            ranking = self.api.get_financial_ranking(code) or {}
+            result.update(ranking)
+        except Exception:
+            pass
+        return result
+
     def get_stock_list(self, market: str = "0") -> list:
         return self.api.get_stock_list(market=market)
+
+    def get_themes(self) -> list:
+        return self.api.get_themes()
+
+    def get_theme_stocks(self, tmcode: str) -> list:
+        return self.api.get_theme_stocks(tmcode)
+
+    def get_sector_indices(self) -> list:
+        return self.api.get_sector_indices()

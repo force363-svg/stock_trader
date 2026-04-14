@@ -1,0 +1,564 @@
+{
+  "timestamp": "2026-04-11T15:37:02.683549",
+  "scan_count": 62,
+  "signals": [
+    {
+      "stock_code": "001780",
+      "stock_name": "알루코",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 2590,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "001820",
+      "stock_name": "삼화콘덴서",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 63100,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "003010",
+      "stock_name": "혜인",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 6050,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "004960",
+      "stock_name": "한신공영",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 16630,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "005690",
+      "stock_name": "파미셀",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 16740,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "005880",
+      "stock_name": "대한해운",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3090,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "005960",
+      "stock_name": "동부건설",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 9290,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "006110",
+      "stock_name": "삼아알미늄",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 55200,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "008350",
+      "stock_name": "남선알미늄",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 2205,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "009180",
+      "stock_name": "한솔로지스틱스",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3210,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "010820",
+      "stock_name": "퍼스텍",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 11390,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "011280",
+      "stock_name": "태림포장",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 2150,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "013580",
+      "stock_name": "계룡건설",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 27400,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "020710",
+      "stock_name": "시공테크",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 4585,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "027710",
+      "stock_name": "팜스토리",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1420,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "031330",
+      "stock_name": "에스에이엠티",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 6370,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "033790",
+      "stock_name": "피노",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 10690,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "042110",
+      "stock_name": "에스씨디",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1508,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "044450",
+      "stock_name": "KSS해운",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 12640,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "047400",
+      "stock_name": "유니온머티리얼",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1642,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "049520",
+      "stock_name": "유아이엘",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 4230,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "052460",
+      "stock_name": "아이크래프트",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3765,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "052710",
+      "stock_name": "아모텍",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 19700,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "053690",
+      "stock_name": "한미글로벌",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 33150,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "054090",
+      "stock_name": "삼진엘앤디",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1056,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "054930",
+      "stock_name": "유신",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 27550,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "056360",
+      "stock_name": "코위버",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 10280,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "058730",
+      "stock_name": "다스코",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3855,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "063760",
+      "stock_name": "이엘피",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3370,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "064290",
+      "stock_name": "인텍플러스",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 24500,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "069730",
+      "stock_name": "DSR제강",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 5300,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "070300",
+      "stock_name": "엑스큐어",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 2205,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "081580",
+      "stock_name": "성우전자",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3205,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "083470",
+      "stock_name": "이엠앤아이",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1431,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "084680",
+      "stock_name": "이월드",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1823,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "086670",
+      "stock_name": "비엠티",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 15240,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "092600",
+      "stock_name": "앤씨앤",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1499,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "094970",
+      "stock_name": "제이엠티",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3540,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "095270",
+      "stock_name": "웨이브일렉트로",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 7810,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "095910",
+      "stock_name": "에스에너지",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1995,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "099220",
+      "stock_name": "SDN",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1344,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "100840",
+      "stock_name": "SNT에너지",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 62200,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "109070",
+      "stock_name": "주성코퍼레이션",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1368,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "109080",
+      "stock_name": "옵티시스",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 17690,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "128660",
+      "stock_name": "피제이메탈",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3545,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "149950",
+      "stock_name": "아바텍",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 11390,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "159010",
+      "stock_name": "아스플로",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 6660,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "173130",
+      "stock_name": "오파스넷",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 7950,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "187870",
+      "stock_name": "디바이스",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 27700,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "217730",
+      "stock_name": "강스템바이오텍",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3600,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "243840",
+      "stock_name": "신흥에스이씨",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 8170,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "251370",
+      "stock_name": "와이엠티",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 16710,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "263020",
+      "stock_name": "디케이앤디",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 3270,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "264450",
+      "stock_name": "유비쿼스",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 16200,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "290550",
+      "stock_name": "디케이티",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 19340,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "307930",
+      "stock_name": "컴퍼니케이",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 8370,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "327260",
+      "stock_name": "RF머트리얼즈",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 92700,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "332290",
+      "stock_name": "누보",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1416,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "382800",
+      "stock_name": "지앤비에스 에코",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 7090,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "393890",
+      "stock_name": "더블유씨피",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 16820,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "396270",
+      "stock_name": "넥스트칩",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 4515,
+      "conditions": {},
+      "confidence": "LOW"
+    },
+    {
+      "stock_code": "424760",
+      "stock_name": "벨로크",
+      "signal_type": "WATCH",
+      "score": 0,
+      "current_price": 1369,
+      "conditions": {},
+      "confidence": "LOW"
+    }
+  ]
+}
